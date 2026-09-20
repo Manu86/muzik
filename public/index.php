@@ -30,6 +30,14 @@ if ($routePath === '' || $routePath[0] !== '/') {
     $routePath = '/' . $routePath;
 }
 
+if (PHP_SAPI === 'cli-server' && $routePath !== '/' && $routePath !== '/index.php') {
+    $candidate = realpath(__DIR__ . '/' . ltrim($routePath, '/'));
+    if ($candidate !== false && str_starts_with($candidate, __DIR__ . DIRECTORY_SEPARATOR)
+        && is_file($candidate) && pathinfo($candidate, PATHINFO_EXTENSION) === 'php') {
+        return false;
+    }
+}
+
 if (!Installer::installed()) {
     $isStaticAsset = false;
     if ($routePath !== '/') {
@@ -81,20 +89,12 @@ if ($routePath !== '/index.php') {
     $candidate = realpath($public . '/' . ltrim($routePath, '/'));
     if ($candidate !== false && str_starts_with($candidate, $public . DIRECTORY_SEPARATOR)
         && is_file($candidate)) {
-        $ext = pathinfo($candidate, PATHINFO_EXTENSION);
-        if ($ext === 'php') {
-            if (PHP_SAPI === 'cli-server') {
-                return false;
-            }
-            header('Content-Type: text/html');
-            readfile($candidate);
-            return;
-        }
         $mime = [
             'html' => 'text/html', 'css' => 'text/css', 'js' => 'application/javascript',
             'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
             'svg' => 'image/svg+xml', 'ico' => 'image/x-icon', 'json' => 'application/json',
         ];
+        $ext = pathinfo($candidate, PATHINFO_EXTENSION);
         header('Content-Type: ' . ($mime[$ext] ?? 'application/octet-stream'));
         header('Cache-Control: no-cache');
         readfile($candidate);
