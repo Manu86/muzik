@@ -2,12 +2,11 @@
 
 Muzik est un lecteur de musique web auto-hébergé. Il indexe une bibliothèque locale dans SQLite, expose une API PHP et fournit une interface responsive installable comme PWA.
 
-<!-- Remplacez OWNER par votre nom d'utilisateur GitHub une fois le dépôt créé. -->
 <p align="center">
-  <a href="https://github.com/OWNER/muzik/actions"><img src="https://github.com/OWNER/muzik/actions/workflows/quality.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Manu86/muzik/actions"><img src="https://github.com/Manu86/muzik/actions/workflows/quality.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue.svg" alt="Licence MIT"></a>
   <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4.svg" alt="PHP 8.1+">
-  <a href="https://github.com/OWNER/muzik/releases"><img src="https://img.shields.io/github/v/release/OWNER/muzik?label=release" alt="Dernière release"></a>
+  <a href="https://github.com/Manu86/muzik/releases"><img src="https://img.shields.io/github/v/release/Manu86/muzik?label=release" alt="Dernière release"></a>
 </p>
 
 ## Aperçu
