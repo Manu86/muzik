@@ -10,7 +10,11 @@ $path = is_string($parsedPath) ? $parsedPath : '/';
 
 $scriptValue = $_SERVER['SCRIPT_NAME'] ?? '/index.php';
 $scriptName = is_string($scriptValue) ? $scriptValue : '/index.php';
-$base = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+if (PHP_SAPI === 'cli-server') {
+    $base = '';
+} else {
+    $base = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+}
 $routePath = $path;
 if ($base !== '' && str_starts_with($routePath, $base)) {
     $routePath = substr($routePath, strlen($base));
