@@ -74,6 +74,8 @@ Elle permet de :
 - régler le chemin FFmpeg et le débit de transcodage ;
 - protéger optionnellement l’application par mot de passe (Apache) ;
 - écrire `config.local.php` et lancer l’indexation initiale de la bibliothèque.
+  L’indexation démarre en arrière-plan (`bin/scan.php`) et se poursuit pendant
+  que l’interface s’ouvre ; ses journaux sont dans `data/scan-install.log`.
 
 La procédure manuelle reste possible :
 

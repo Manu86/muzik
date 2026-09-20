@@ -46,7 +46,7 @@ if (Installer::installed($projectRoot)) {
 
 /** @var list<string> $errors */
 $errors = [];
-/** @var array{added: int, scan_error: ?string}|null $result */
+/** @var array{added: ?int, scan_error: ?string, background: bool}|null $result */
 $result = null;
 
 $musicRoot = App::config('music_root');
@@ -119,20 +119,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($written) {
             Installer::markInstalled();
 
-            $before = (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn();
-            $scanError = null;
-            set_time_limit(0);
-            try {
-                ob_start();
-                (new Scanner())->run(false);
-                ob_end_clean();
-            } catch (Throwable $throwable) {
-                ob_end_clean();
-                $scanError = $throwable->getMessage();
-            }
-            $after = (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn();
+            if (Installer::startBackgroundScan($projectRoot)) {
+                $result = ['added' => null, 'scan_error' => null, 'background' => true];
+            } else {
+                $before = (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn();
+                $scanError = null;
+                set_time_limit(0);
+                try {
+                    ob_start();
+                    (new Scanner())->run(false);
+                    ob_end_clean();
+                } catch (Throwable $throwable) {
+                    ob_end_clean();
+                    $scanError = $throwable->getMessage();
+                }
+                $after = (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn();
 
-            $result = ['added' => max(0, $after - $before), 'scan_error' => $scanError];
+                $result = ['added' => max(0, $after - $before), 'scan_error' => $scanError, 'background' => false];
+            }
         } else {
             $errors[] = 'Impossible d\'écrire la configuration (config.local.php). '
                 . 'Vérifiez les droits d\'écriture du dossier.';
@@ -206,16 +210,25 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
 <?php if ($result !== null): ?>
     <section class="success">
       <h2>Installation terminée</h2>
+<?php if ($result['background']): ?>
+      <p>La configuration est enregistrée et l'indexation de votre bibliothèque
+      est lancée en arrière-plan. Elle se poursuit pendant quelques minutes.</p>
+      <p class="details">Vous pouvez suivre la progression dans
+      <code>data/scan-install.log</code>. L'interface va s'ouvrir automatiquement.</p>
+<?php elseif ($result['scan_error'] !== null): ?>
       <p>
         La bibliothèque a été indexée
         (<?= $result['added'] ?> nouvelle<?= $result['added'] > 1 ? 's' : '' ?> piste<?= $result['added'] > 1 ? 's' : '' ?>).
       </p>
-<?php if ($result['scan_error'] !== null): ?>
       <p class="details">
         Le scan s'est interrompu avant la fin : <?= App::e((string) $result['scan_error']) ?>.<br>
         Vous pourrez terminer l'indexation avec <code>php bin/scan.php</code> depuis la ligne de commande.
       </p>
 <?php else: ?>
+      <p>
+        La bibliothèque a été indexée
+        (<?= $result['added'] ?> nouvelle<?= $result['added'] > 1 ? 's' : '' ?> piste<?= $result['added'] > 1 ? 's' : '' ?>).
+      </p>
       <p class="details">L'interface va s'ouvrir automatiquement. Si rien ne se passe, <a href="./" style="color:#1db954">lancez Muzik</a>.</p>
 <?php endif; ?>
     </section>
@@ -296,6 +309,19 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
                 <?= $hasFatalRequirement ? 'disabled' : '' ?>>Installer et scanner</button>
       </section>
     </form>
+    <script>
+      (function () {
+        var form = document.querySelector('form[action="./install.php"]');
+        if (!form) { return; }
+        form.addEventListener('submit', function () {
+          var button = form.querySelector('button[type="submit"]');
+          if (button) {
+            button.disabled = true;
+            button.textContent = 'Installation en cours…';
+          }
+        });
+      })();
+    </script>
 <?php endif; ?>
 
   <footer>Muzik · lecteur de musique auto-hébergé</footer>

@@ -175,4 +175,54 @@ final class Installer
     {
         DB::setSetting('installed', '1');
     }
+
+    /**
+     * Lance bin/scan.php en arrière-plan et retourne immédiatement.
+     *
+     * Évite de bloquer le serveur web pendant la première indexation (un
+     * serveur de développement ou un hébergement partagé peut être
+     * mono-processus). Le processus est détaché : il continue après la réponse
+     * HTTP et écrit ses journaux dans data/scan-install.log.
+     *
+     * Retourne false si aucun processus n'a pu être détaché — l'appelant doit
+     * alors scanner de façon synchrone.
+     */
+    public static function startBackgroundScan(string $projectRoot): bool
+    {
+        if (!function_exists('proc_open')) {
+            return false;
+        }
+        $script = $projectRoot . '/bin/scan.php';
+        if (!is_file($script)) {
+            return false;
+        }
+
+        $log = $projectRoot . '/data/scan-install.log';
+        @mkdir($projectRoot . '/data', 0777, true);
+
+        if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'cli-server') {
+            $phpBinary = defined('PHP_BINDIR') ? PHP_BINDIR . '/php' : 'php';
+        } else {
+            $phpBinary = PHP_BINARY;
+        }
+
+        $process = @proc_open(
+            [$phpBinary, $script],
+            [
+                0 => ['file', '/dev/null', 'r'],
+                1 => ['file', $log, 'a'],
+                2 => ['file', $log, 'a'],
+            ],
+            $pipes,
+            $projectRoot,
+        );
+
+        if (!is_resource($process)) {
+            return false;
+        }
+
+        // Ne pas appeler proc_close() : il attendrait la fin du scan. Le
+        // processus devient orphelin et se termine tout seul.
+        return true;
+    }
 }

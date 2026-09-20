@@ -170,4 +170,27 @@ final class InstallerTest extends TestCase
     {
         self::assertSame(0, Installer::countAudioFiles($this->temporaryDirectory . '/absent'));
     }
+
+    public function testStartBackgroundScanReturnsFalseWithoutScript(): void
+    {
+        $this->initialiseApp();
+        self::assertFalse(Installer::startBackgroundScan($this->temporaryDirectory));
+    }
+
+    public function testStartBackgroundScanSpawnsAnInstallerLog(): void
+    {
+        if (!function_exists('proc_open')) {
+            $this->markTestSkipped('proc_open est désactivé.');
+        }
+
+        $this->initialiseApp();
+        mkdir($this->temporaryDirectory . '/bin', 0777, true);
+        file_put_contents($this->temporaryDirectory . '/bin/scan.php', "<?php\n");
+        mkdir($this->temporaryDirectory . '/data', 0777, true);
+
+        self::assertTrue(Installer::startBackgroundScan($this->temporaryDirectory));
+
+        usleep(300000);
+        self::assertFileExists($this->temporaryDirectory . '/data/scan-install.log');
+    }
 }
