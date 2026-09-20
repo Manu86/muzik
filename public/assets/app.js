@@ -562,7 +562,7 @@ async function loadHome() {
             <img loading="lazy" src="api/art/${s.album_id || ''}" alt="" onerror="this.remove()">
             <span class="cover-label">${esc(s.artist_name)}</span>
           </button>`).join('')}
-      </div>` : '<div class="empty">Aucun favori pour le moment.<br>Appuie sur ♡ sur une piste pour la retrouver ici.</div>'}
+      </div>` : '<div class="empty">Aucun favoris pour le moment.<br>Appuie sur ♡ sur une piste pour la retrouver ici.</div>'}
     </div>
   `;
 
@@ -933,7 +933,7 @@ async function loadFavorites() {
   const el = $('#view-favorites');
   const songs = await api.get('api/favorites');
   if (!songs.length) {
-    el.innerHTML = '<div class="empty">Aucune poche pour le moment.<br>Appuie sur ♡ sur une piste pour la retrouver ici.</div>';
+    el.innerHTML = '<div class="empty">Aucun favoris pour le moment.<br>Appuie sur ♡ sur une piste pour la retrouver ici.</div>';
     return;
   }
   const favIds = await getFavIds();
