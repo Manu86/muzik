@@ -32,5 +32,8 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Install Python tag library
+        run: python3 -m pip install --user mutagen
+
       - name: Run quality checks
         run: composer quality
