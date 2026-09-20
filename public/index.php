@@ -3,17 +3,6 @@
 declare(strict_types=1);
 error_reporting(E_ALL);
 
-require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/DB.php';
-require __DIR__ . '/../src/App.php';
-require __DIR__ . '/../src/Installer.php';
-require __DIR__ . '/../src/Auth.php';
-require __DIR__ . '/../src/Router.php';
-require __DIR__ . '/../src/Api.php';
-require __DIR__ . '/../src/Streamer.php';
-
-App::initConfig(require __DIR__ . '/../config.php');
-
 $uriValue = $_SERVER['REQUEST_URI'] ?? '/';
 $uri = is_string($uriValue) ? $uriValue : '/';
 $parsedPath = parse_url($uri, PHP_URL_PATH);
@@ -37,6 +26,17 @@ if (PHP_SAPI === 'cli-server' && $routePath !== '/' && $routePath !== '/index.ph
         return false;
     }
 }
+
+require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../src/DB.php';
+require __DIR__ . '/../src/App.php';
+require __DIR__ . '/../src/Installer.php';
+require __DIR__ . '/../src/Auth.php';
+require __DIR__ . '/../src/Router.php';
+require __DIR__ . '/../src/Api.php';
+require __DIR__ . '/../src/Streamer.php';
+
+App::initConfig(require __DIR__ . '/../config.php');
 
 if (!Installer::installed()) {
     $isStaticAsset = false;
