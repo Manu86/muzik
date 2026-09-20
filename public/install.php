@@ -16,12 +16,12 @@ if (!is_file(__DIR__ . '/../vendor/autoload.php') || !is_dir(__DIR__ . '/../vend
 </head>
 <body style="font-family:system-ui,sans-serif;background:#121212;color:#e8e8e8;line-height:1.6;margin:0;padding:2rem 1rem;">
   <main style="max-width:40rem;margin:0 auto;">
-    <h1 style="color:#1db954;">♪ Muzik — Dépendances manquantes</h1>
+    <h1 style="color:#27d397;">♪ Muzik — Dépendances manquantes</h1>
     <p>Les dépendances PHP (<code>vendor/</code>) ne sont pas installées. Le script
     d'installation ne peut pas démarrer sans elles.</p>
     <p>Depuis le terminal, à la racine du projet :</p>
     <pre style="background:#1e1e1e;border:1px solid #2e2e2e;border-radius:8px;padding:1rem;">composer install</pre>
-    <p>Puis rechargez la page <a href="./install.php" style="color:#1db954;">./install.php</a>.</p>
+    <p>Puis rechargez la page <a href="./install.php" style="color:#27d397;">./install.php</a>.</p>
   </main>
 </body>
 </html>
@@ -170,7 +170,7 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
            background:#121212; color:#e8e8e8; line-height:1.5; }
     .wrap { max-width:720px; margin:0 auto; padding:2rem 1rem 4rem; }
     h1 { font-size:1.6rem; margin:0 0 .25rem; }
-    h1 .ico { color:#1db954; }
+    h1 .ico { color:#27d397; }
     .sub { color:#9b9b9b; margin:0 0 1.5rem; }
     .card { background:#1e1e1e; border:1px solid #2e2e2e; border-radius:10px;
             padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
@@ -178,7 +178,7 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
     table { width:100%; border-collapse:collapse; font-size:.95rem; }
     td { padding:.35rem 0; border-bottom:1px solid #2a2a2a; }
     td:last-child { text-align:right; color:#bbb; }
-    .ok { color:#1db954; font-weight:600; }
+    .ok { color:#27d397; font-weight:600; }
     .bad { color:#e5484d; font-weight:600; }
     .warn { color:#e8a33d; font-weight:600; }
     label { display:block; font-weight:600; margin:1rem 0 .35rem; }
@@ -190,14 +190,16 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
              background:#141414; color:#e8e8e8; font-size:1rem; }
     .check { margin:.4rem 0; }
     button.primary { margin-top:1.5rem; padding:.8rem 1.4rem; font-size:1.05rem;
-      background:#1db954; color:#000; border:0; border-radius:8px;
+      background:#27d397; color:#082015; border:0; border-radius:8px;
       font-weight:700; cursor:pointer; }
-    button.primary:disabled { background:#3a5a46; color:#8a8a8a; cursor:not-allowed; }
+    button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+    button.primary:disabled { background:#27d397; color:#082015; opacity:.4;
+      cursor:not-allowed; }
     .error { background:#3a1516; border:1px solid #e5484d; border-radius:8px;
              padding:1rem 1.25rem; margin-bottom:1.25rem; }
     .error ul { margin:0; padding-left:1.25rem; }
-    .success { background:#15301f; border:1px solid #1db954; border-radius:8px;
-               padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
+.success { background:#15301f; border:1px solid #27d397; border-radius:8px;
+             padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
     .details { font-size:.9rem; color:#a5a5a5; }
     footer { color:#6f6f6f; font-size:.85rem; text-align:center; margin-top:2rem; }
   </style>
@@ -229,7 +231,7 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
         La bibliothèque a été indexée
         (<?= $result['added'] ?> nouvelle<?= $result['added'] > 1 ? 's' : '' ?> piste<?= $result['added'] > 1 ? 's' : '' ?>).
       </p>
-      <p class="details">L'interface va s'ouvrir automatiquement. Si rien ne se passe, <a href="./" style="color:#1db954">lancez Muzik</a>.</p>
+      <p class="details">L'interface va s'ouvrir automatiquement. Si rien ne se passe, <a href="./" style="color:#27d397">lancez Muzik</a>.</p>
 <?php endif; ?>
     </section>
     <meta http-equiv="refresh" content="3;url=./">
