@@ -16,7 +16,9 @@ if (!is_file(__DIR__ . '/../vendor/autoload.php') || !is_dir(__DIR__ . '/../vend
 </head>
 <body style="font-family:system-ui,sans-serif;background:#121212;color:#e8e8e8;line-height:1.6;margin:0;padding:2rem 1rem;">
   <main style="max-width:40rem;margin:0 auto;">
-    <h1 style="color:#27d397;">♪ Muzik — Dépendances manquantes</h1>
+    <img class="logo" src="assets/icon-192.png?v=3" alt="Muzik" width="72" height="72"
+         style="display:block;width:72px;height:72px;margin:0 auto 1.25rem;border-radius:16px;">
+    <h1 style="color:#27d397;text-align:center;">♪ Muzik — Dépendances manquantes</h1>
     <p>Les dépendances PHP (<code>vendor/</code>) ne sont pas installées. Le script
     d'installation ne peut pas démarrer sans elles.</p>
     <p>Depuis le terminal, à la racine du projet :</p>
@@ -169,9 +171,10 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
     body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
            background:#121212; color:#e8e8e8; line-height:1.5; }
     .wrap { max-width:720px; margin:0 auto; padding:2rem 1rem 4rem; }
-    h1 { font-size:1.6rem; margin:0 0 .25rem; }
+    h1 { font-size:1.6rem; margin:0 0 .25rem; text-align:center; }
     h1 .ico { color:#27d397; }
-    .sub { color:#9b9b9b; margin:0 0 1.5rem; }
+    .logo { display:block; width:72px; height:72px; margin:0 auto 1.25rem; border-radius:16px; }
+    .sub { color:#9b9b9b; margin:0 0 1.5rem; text-align:center; }
     .card { background:#1e1e1e; border:1px solid #2e2e2e; border-radius:10px;
             padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
     h2 { font-size:1.05rem; margin:0 0 1rem; }
@@ -206,6 +209,7 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
 </head>
 <body>
 <div class="wrap">
+  <img class="logo" src="assets/icon-192.png?v=3" alt="Muzik" width="72" height="72">
   <h1><span class="ico">♪</span> Muzik</h1>
   <p class="sub">Installation de votre lecteur de musique</p>
 
