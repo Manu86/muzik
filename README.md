@@ -6,7 +6,7 @@ Muzik est un lecteur de musique web auto-hébergé. Il indexe une bibliothèque 
   <a href="https://github.com/Manu86/muzik/actions"><img src="https://github.com/Manu86/muzik/actions/workflows/quality.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-blue.svg" alt="Licence MIT"></a>
   <img src="https://img.shields.io/badge/PHP-8.1%2B-777BB4.svg" alt="PHP 8.1+">
-  <img src="https://img.shields.io/github/last-commit/Manu86/muzik" alt="Dernier commit">
+  <a href="https://github.com/Manu86/muzik/releases"><img src="https://img.shields.io/github/v/release/Manu86/muzik?label=release" alt="Dernière release"></a>
 </p>
 
 ## Aperçu
