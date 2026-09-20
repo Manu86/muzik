@@ -1,0 +1,38 @@
+/vendor/
+/node_modules/
+
+# Configuration et authentification locales
+/config.local.php
+/config/apache-muzik.conf
+/.env
+/.env.*
+!/.env.example
+/.htpasswd
+/*.htpasswd
+# Extrait de configuration d'authentification provenant d'un outil externe
+/...
+
+# Catalogue, caches et résultats locaux
+/data/*
+!/data/.gitkeep
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+*.out
+
+# Caches et fichiers temporaires
+__pycache__/
+*.py[cod]
+*~
+*.tmp
+/_AW7IV~D
+
+# Environnement de développement
+/.agents/
+/.codex/
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db

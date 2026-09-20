@@ -1,0 +1,19 @@
+parameters:
+    level: 10
+    paths:
+        - src
+        - bin/scan.php
+        - public/index.php
+        - config.php
+        - config/app.php
+        - config.local.example.php
+        - tests
+    scanFiles:
+        - bin/fetch-art.php
+        - bin/album-resolve.php
+        - bin/album-edit.php
+        - bin/fetch-artist-art.php
+    tmpDir: /tmp/muzik-phpstan
+    treatPhpDocTypesAsCertain: false
+    parallel:
+        maximumNumberOfProcesses: 1

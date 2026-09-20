@@ -1,0 +1,7 @@
+# Muzik : les fichiers essentiels de la PWA restent accessibles, quelle que
+# soit la protection par mot de passe de l'application.
+# - manifest.json et icônes : requis pour l'installation de la PWA ;
+# Ces fichiers ne contiennent aucune donnée privée.
+<FilesMatch "^(manifest\.json|icon-192\.png|icon-512\.png)$">
+    Require all granted
+</FilesMatch>

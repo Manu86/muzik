@@ -1,0 +1,1142 @@
+openapi: 3.1.0
+info:
+  title: Muzik API
+  version: 1.0.0
+  description: |
+    API HTTP du lecteur musical Muzik. Les chemins sont relatifs au point de
+    montage de l'application, généralement `/muzik` sous Apache.
+
+    L'authentification éventuelle est assurée par l'application PHP (session,
+    hachage bcrypt en configuration) : les routes protégées renvoient 401 tant
+    que POST /api/login n'a pas établi de session. La route de suppression
+    d'album efface des fichiers.
+servers:
+  - url: /muzik
+    description: Déploiement Apache fourni
+  - url: /
+    description: Serveur PHP ou autre déploiement à la racine
+tags:
+  - name: Catalogue
+  - name: Lecture
+  - name: Bibliothèque
+  - name: Préférences
+paths:
+  /api/auth:
+    get:
+      tags: [Préférences]
+      summary: État de l'authentification
+      operationId: getAuth
+      responses:
+        '200':
+          description: État actuel de la session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authenticated]
+                properties:
+                  authenticated:
+                    type: boolean
+                  user:
+                    type: string
+                    nullable: true
+    head:
+      tags: [Préférences]
+      summary: Vérifie la disponibilité de l'état d'authentification
+      operationId: headAuth
+      responses:
+        '200':
+          description: Disponible, sans corps de réponse.
+  /api/login:
+    post:
+      tags: [Préférences]
+      summary: Ouvre une session d'authentification
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user, pass]
+              properties:
+                user:
+                  type: string
+                pass:
+                  type: string
+      responses:
+        '200':
+          description: Session ouverte
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  user:
+                    type: string
+                    nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/logout:
+    post:
+      tags: [Préférences]
+      summary: Ferme la session courante
+      operationId: logout
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+
+  /api/summary:
+    get:
+      tags: [Catalogue]
+      summary: Résumé de la bibliothèque
+      operationId: getSummary
+      responses:
+        '200':
+          description: Totaux du catalogue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Summary'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité du résumé
+      operationId: headSummary
+      responses:
+        '200':
+          description: Résumé disponible, sans corps de réponse.
+  /api/ping:
+    get:
+      tags: [Lecture]
+      summary: Garde la connexion du lecteur éveillée
+      description: |
+        Point de contact minimal, sans état. Le lecteur mobile l'appelle
+        régulièrement pendant une lecture en arrière-plan pour maintenir le
+        réseau de l'appareil actif et permettre le pré-chargement des pistes.
+      operationId: ping
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+    head:
+      tags: [Lecture]
+      summary: Vérifie la disponibilité du ping
+      operationId: headPing
+      responses:
+        '200':
+          description: Ping disponible, sans corps de réponse.
+  /api/artists:
+    get:
+      tags: [Catalogue]
+      summary: Index ou liste des artistes
+      operationId: getArtists
+      parameters:
+        - name: letter
+          in: query
+          description: Si présent, renvoie les artistes commençant par cette lettre.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1
+      responses:
+        '200':
+          description: Index alphabétique sans `letter`, tableau d'artistes avec `letter`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ArtistIndex'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ArtistListItem'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité de l'index des artistes
+      operationId: headArtists
+      responses:
+        '200':
+          description: Index disponible, sans corps de réponse.
+  /api/albums:
+    get:
+      tags: [Catalogue]
+      summary: Liste paginée des albums
+      operationId: getAlbums
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: artist_id
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: letter
+          in: query
+          description: Première lettre du nom d'artiste.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1
+      responses:
+        '200':
+          description: Page d'albums, 240 éléments au maximum.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumPage'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité de la liste des albums
+      operationId: headAlbums
+      responses:
+        '200':
+          description: Liste disponible, sans corps de réponse.
+  /api/artist/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Détail d'un artiste et de ses albums
+      operationId: getArtist
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Artiste trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtistDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie l'existence d'un artiste
+      operationId: headArtist
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Artiste trouvé, sans corps de réponse.
+        '404':
+          description: Artiste absent.
+  /api/album/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Détail d'un album et de ses pistes
+      operationId: getAlbum
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Album trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Bibliothèque]
+      summary: Modifie le nom ou l'année d'un album
+      description: |
+        Met à jour la base (le nom et/ou l'année). Les tags des fichiers
+        audio ne sont pas écrits par cette route : lancer
+        `php bin/album-edit.php <id> --apply` pour répercuter dans les fichiers.
+      operationId: updateAlbum
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                year:
+                  type: [integer, 'null']
+      responses:
+        '200':
+          description: Album mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, id, name, year]
+                properties:
+                  ok:
+                    const: true
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  year:
+                    type: [integer, 'null']
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Un album du même artiste porte déjà ce nom
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie l'existence d'un album
+      operationId: headAlbum
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Album trouvé, sans corps de réponse.
+        '404':
+          description: Album absent.
+    delete:
+      tags: [Bibliothèque]
+      summary: Supprime un album et ses fichiers
+      description: |
+        Supprime de SQLite l'album et ses pistes. Les fichiers audio et
+        jaquettes ne sont effacés que si leur chemin se trouve sous
+        `music_root`. L'artiste est supprimé s'il ne possède plus d'album.
+        Cette opération est irréversible.
+      operationId: deleteAlbum
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Résultat de la suppression
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, songs, files_deleted]
+                properties:
+                  ok:
+                    const: true
+                  songs:
+                    type: integer
+                  files_deleted:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/song/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Métadonnées complètes d'une piste
+      operationId: getSong
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Piste trouvée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SongDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie l'existence d'une piste
+      operationId: headSongMetadata
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Piste trouvée, sans corps de réponse.
+        '404':
+          description: Piste absente.
+  /api/search:
+    get:
+      tags: [Catalogue]
+      summary: Recherche globale
+      operationId: searchCatalogue
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        '200':
+          description: Résultats limités à 30 pistes, 20 artistes et 20 albums.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité de la recherche
+      operationId: headSearch
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        '200':
+          description: Recherche disponible, sans corps de réponse.
+        '400':
+          description: Requête de recherche trop courte.
+  /api/random:
+    get:
+      tags: [Catalogue]
+      summary: Sélection aléatoire de pistes
+      operationId: getRandomSongs
+      parameters:
+        - name: n
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Pistes choisies aléatoirement
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayableSong'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité de la sélection aléatoire
+      operationId: headRandomSongs
+      responses:
+        '200':
+          description: Sélection disponible, sans corps de réponse.
+  /api/play/{id}:
+    post:
+      tags: [Lecture]
+      summary: Enregistre une écoute
+      operationId: recordPlay
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+  /api/top:
+    get:
+      tags: [Lecture]
+      summary: Classements d'écoute
+      operationId: getTop
+      responses:
+        '200':
+          description: Pistes, albums et total des écoutes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopResults'
+    head:
+      tags: [Lecture]
+      summary: Vérifie la disponibilité des classements
+      operationId: headTop
+      responses:
+        '200':
+          description: Classements disponibles, sans corps de réponse.
+  /api/recent:
+    get:
+      tags: [Lecture]
+      summary: Pistes récemment écoutées
+      operationId: getRecent
+      responses:
+        '200':
+          description: Au maximum 60 pistes, de la plus récente à la plus ancienne.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecentSong'
+    head:
+      tags: [Lecture]
+      summary: Vérifie la disponibilité des écoutes récentes
+      operationId: headRecent
+      responses:
+        '200':
+          description: Historique disponible, sans corps de réponse.
+  /api/stream/{id}:
+    get:
+      tags: [Lecture]
+      summary: Diffuse une piste
+      operationId: streamSong
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: transcode
+          in: query
+          description: |
+            Débit MP3 en kbit/s pour les sources non-MP3 (lossless), ou 0 pour
+            le fichier original. Les sources MP3 sont toujours servies telles
+            quelles.
+          schema:
+            type: integer
+            enum: [0, 64, 96, 128, 192, 256]
+            default: 0
+        - name: start
+          in: query
+          description: Position de départ du transcodage en secondes (décimales), utile pour reprendre une piste en bitrate léger.
+          schema:
+            type: number
+            minimum: 0
+            default: 0
+        - name: Range
+          in: header
+          description: Plage d'octets pour une lecture directe.
+          schema:
+            type: string
+            examples: [bytes=0-1048575]
+      responses:
+        '200':
+          description: Fichier complet ou flux MP3 transcodé.
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                contentMediaType: audio/mpeg
+                contentEncoding: binary
+        '206':
+          description: Partie du fichier demandée.
+          headers:
+            Content-Range:
+              schema:
+                type: string
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                contentEncoding: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '416':
+          description: Plage d'octets invalide.
+    head:
+      tags: [Lecture]
+      summary: Vérifie la disponibilité d'une piste
+      operationId: headSong
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Piste disponible.
+        '404':
+          description: Piste ou fichier absent.
+  /api/art/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Renvoie une jaquette
+      description: >-
+        Renvoie la jaquette d'un album par défaut. Avec `type=artist`, renvoie
+        la photo de l'artiste ou, à défaut, la jaquette de son album comportant
+        le plus de pistes.
+      operationId: getArtwork
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - name: type
+          in: query
+          description: Type d'entité dont la jaquette est demandée.
+          schema:
+            type: string
+            enum: [album, artist]
+            default: album
+      responses:
+        '200':
+          description: Image JPEG ou PNG.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                contentEncoding: binary
+            image/png:
+              schema:
+                type: string
+                contentEncoding: binary
+        '404':
+          description: Jaquette absente.
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité d'une jaquette
+      operationId: headArtwork
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Jaquette disponible.
+        '404':
+          description: Jaquette absente.
+  /api/genres:
+    get:
+      tags: [Catalogue]
+      summary: Liste les genres
+      operationId: getGenres
+      responses:
+        '200':
+          description: Genres et nombres d'albums et de pistes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GenreSummary'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité de la liste des genres
+      operationId: headGenres
+      responses:
+        '200':
+          description: Liste disponible, sans corps de réponse.
+  /api/home:
+    get:
+      tags: [Catalogue]
+      summary: Données de la page d'accueil
+      operationId: getHome
+      description: Genres, artistes et albums au hasard, écoutes récentes et poches.
+      responses:
+        '200':
+          description: Contenu agrégé pour la page d'accueil.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  genres:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GenreSummary'
+                  artists:
+                    type: array
+                    description: 8 artistes tirés au hasard.
+                    items:
+                      $ref: '#/components/schemas/ArtistListItem'
+                  albums:
+                    type: array
+                    description: 8 albums tirés au hasard.
+                    items:
+                      $ref: '#/components/schemas/AlbumListItem'
+                  recent:
+                    type: array
+                    description: 10 dernières pistes écoutées.
+                    items:
+                      $ref: '#/components/schemas/RecentSong'
+                  poche:
+                    type: array
+                    description: 8 dernières pistes mises dans les poches.
+                    items:
+                      $ref: '#/components/schemas/RecentSong'
+                  covers:
+                    type: array
+                    description: Pochettes distinctes des écoutes récentes.
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        name:
+                          type: string
+                        artist_name:
+                          type: string
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité de la page d'accueil
+      operationId: headHome
+      responses:
+        '200':
+          description: Données disponibles, sans corps de réponse.
+  /api/genre:
+    get:
+      tags: [Catalogue]
+      summary: Détail d'un genre
+      operationId: getGenre
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Albums du genre.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenreDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    head:
+      tags: [Catalogue]
+      summary: Vérifie la disponibilité d'un genre
+      operationId: headGenre
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Genre disponible, sans corps de réponse.
+        '400':
+          description: Nom du genre absent.
+  /api/favorites:
+    get:
+      tags: [Préférences]
+      summary: Liste ou modifie les favoris
+      description: |
+        Sans paramètre, liste les favoris. `add` et `remove` modifient la liste
+        puis la renvoient. `check` renvoie uniquement l'état de la piste.
+        Cette mutation par GET est un comportement historique de l'API.
+      operationId: getOrChangeFavorites
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [add, remove, check]
+        - name: id
+          in: query
+          description: Identifiant requis lorsqu'une action est fournie.
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Liste des favoris ou état d'une piste.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/PlayableSong'
+                  - type: object
+                    required: [favorited]
+                    properties:
+                      favorited:
+                        type: boolean
+    head:
+      tags: [Préférences]
+      summary: Vérifie la disponibilité des favoris
+      operationId: headFavorites
+      responses:
+        '200':
+          description: Favoris disponibles, sans corps de réponse.
+  /api/settings:
+    get:
+      tags: [Préférences]
+      summary: Lit ou modifie les réglages
+      description: |
+        Sans paramètre, renvoie toutes les valeurs. Avec `set_key`, enregistre
+        `value` puis renvoie `{ "ok": true }`. La mutation par GET est un
+        comportement historique de l'API.
+      operationId: getOrChangeSettings
+      parameters:
+        - name: set_key
+          in: query
+          schema:
+            type: string
+        - name: value
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Objet de réglages ou confirmation.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    additionalProperties:
+                      type: [string, 'null']
+                  - $ref: '#/components/schemas/Ok'
+    head:
+      tags: [Préférences]
+      summary: Vérifie la disponibilité des réglages
+      operationId: headSettings
+      responses:
+        '200':
+          description: Réglages disponibles, sans corps de réponse.
+  /api/diag:
+    post:
+      tags: [Diagnostic]
+      summary: Dépose le journal de diagnostic du lecteur
+      description: |
+        Corps JSON `{ "log": [...] }`. Le serveur persiste le journal dans un
+        fichier `diag-*.json` à côté de la base, sans interroger la bibliothèque.
+        Utile pour diagnostiquer la lecture en arrière-plan, écran verrouillé.
+      operationId: postDiag
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [log]
+              properties:
+                log:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: object
+      responses:
+        '200':
+          $ref: '#/components/responses/Ok'
+        '400':
+          $ref: '#/components/responses/Error'
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+  responses:
+    Unauthorized:
+      description: Accès refusé
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error:
+                type: string
+    Ok:
+      description: Opération réussie.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Ok'
+    BadRequest:
+      description: Paramètre invalide.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Ressource ou fichier absent.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Ok:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          const: true
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Summary:
+      type: object
+      required: [artists, albums, songs, size, duration]
+      properties:
+        artists:
+          type: integer
+        albums:
+          type: integer
+        songs:
+          type: integer
+        size:
+          type: integer
+          description: Taille totale en octets.
+        duration:
+          type: number
+          description: Durée totale en secondes.
+    ArtistIndex:
+      type: object
+      required: [letters, total]
+      properties:
+        letters:
+          type: array
+          items:
+            type: object
+            required: [l, c]
+            properties:
+              l:
+                type: string
+              c:
+                type: integer
+        total:
+          type: integer
+    ArtistListItem:
+      type: object
+      required: [id, name, song_count]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        art_path:
+          type: [string, 'null']
+        song_count:
+          type: integer
+    ArtistDetail:
+      allOf:
+        - type: object
+          required: [id, name, path, albums]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            path:
+              type: string
+            art_path:
+              type: [string, 'null']
+            albums:
+              type: array
+              items:
+                $ref: '#/components/schemas/AlbumListItem'
+    AlbumListItem:
+      type: object
+      required: [id, name, song_count]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        year:
+          type: [integer, 'null']
+        art_path:
+          type: [string, 'null']
+        artist_name:
+          type: string
+        artist_id:
+          type: integer
+        song_count:
+          type: integer
+    AlbumPage:
+      type: object
+      required: [albums, total, page]
+      properties:
+        albums:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumListItem'
+        total:
+          type: integer
+        page:
+          type: integer
+    AlbumDetail:
+      type: object
+      required: [id, artist_id, artist_name, name, path, songs]
+      properties:
+        id:
+          type: integer
+        artist_id:
+          type: integer
+        artist_name:
+          type: string
+        name:
+          type: string
+        year:
+          type: [integer, 'null']
+        path:
+          type: [string, 'null']
+          description: Chemin relatif calculé à partir de la première piste.
+        art_path:
+          type: [string, 'null']
+        genre:
+          type: [string, 'null']
+        songs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumSong'
+    AlbumSong:
+      type: object
+      required: [id, title, size, path]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        track:
+          type: [integer, 'null']
+        disc:
+          type: [integer, 'null']
+        duration:
+          type: [number, 'null']
+        bitrate:
+          type: [integer, 'null']
+        size:
+          type: integer
+        path:
+          type: string
+    SongDetail:
+      allOf:
+        - $ref: '#/components/schemas/AlbumSong'
+        - type: object
+          required: [album_id, artist_id, artist_name, album_name, mtime, play_count]
+          properties:
+            album_id:
+              type: integer
+            artist_id:
+              type: integer
+            artist_name:
+              type: string
+            album_name:
+              type: string
+            art_path:
+              type: [string, 'null']
+            mtime:
+              type: integer
+            play_count:
+              type: integer
+            last_played:
+              type: [string, 'null']
+    PlayableSong:
+      type: object
+      required: [id, title, artist_name, album_name, album_id]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        duration:
+          type: [number, 'null']
+        bitrate:
+          type: [integer, 'null']
+        path:
+          type: string
+        artist_name:
+          type: string
+        artist_id:
+          type: integer
+        album_name:
+          type: string
+        album_id:
+          type: integer
+        art_path:
+          type: [string, 'null']
+    SearchResults:
+      type: object
+      required: [songs, artists, albums]
+      properties:
+        songs:
+          type: array
+          items:
+            type: object
+            required: [id, title, type, artist_name, album_name]
+            properties:
+              id:
+                type: integer
+              title:
+                type: string
+              type:
+                const: song
+              artist_name:
+                type: string
+              album_name:
+                type: string
+        artists:
+          type: array
+          items:
+            type: object
+            required: [id, name, type]
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              type:
+                const: artist
+        albums:
+          type: array
+          items:
+            type: object
+            required: [id, name, type]
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              type:
+                const: album
+    TopResults:
+      type: object
+      required: [songs, albums, total_plays]
+      properties:
+        songs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        albums:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        total_plays:
+          type: integer
+    RecentSong:
+      type: object
+      required: [id, title, last_played, artist_name, album_name, album_id]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        last_played:
+          type: string
+        artist_name:
+          type: string
+        album_name:
+          type: string
+        album_id:
+          type: integer
+    GenreSummary:
+      type: object
+      required: [genre, album_count, song_count]
+      properties:
+        genre:
+          type: string
+        album_count:
+          type: integer
+        song_count:
+          type: integer
+    GenreDetail:
+      type: object
+      required: [genre, albums, total_albums, total_songs]
+      properties:
+        genre:
+          type: string
+        albums:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumListItem'
+        total_albums:
+          type: integer
+        total_songs:
+          type: integer

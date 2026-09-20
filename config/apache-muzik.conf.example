@@ -1,0 +1,10 @@
+Alias /muzik /var/www/muzik/public
+
+<Directory /var/www/muzik/public>
+    Options -Indexes +FollowSymLinks
+    AllowOverride All
+    DirectoryIndex index.html
+    FallbackResource /muzik/index.php
+# L'authentification est gérée par l'application PHP (session + bcrypt).
+    # Aucune protection Apache n'est nécessaire en regard.
+</Directory>

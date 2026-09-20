@@ -1,0 +1,651 @@
+<?php
+
+final class Api
+{
+    public static function summary(): void
+    {
+        $db = App::pdo();
+        $artists = (int) $db->query('SELECT COUNT(*) FROM artists')->fetchColumn();
+        $albums  = (int) $db->query('SELECT COUNT(*) FROM albums')->fetchColumn();
+        $songs   = (int) $db->query('SELECT COUNT(*) FROM songs')->fetchColumn();
+        $totalSize = (int) $db->query('SELECT COALESCE(SUM(size),0) FROM songs')->fetchColumn();
+        $totalDuration = (float) $db->query('SELECT COALESCE(SUM(duration),0) FROM songs')->fetchColumn();
+        App::json([
+            'artists' => $artists,
+            'albums'  => $albums,
+            'songs'   => $songs,
+            'size'    => $totalSize,
+            'duration' => $totalDuration,
+        ]);
+    }
+
+    public static function login(): void
+    {
+        if (!Auth::enabled()) {
+            App::json(['ok' => true, 'user' => null]);
+        }
+        $input = json_decode((string) file_get_contents('php://input'), true);
+        $body = is_array($input) ? $input : $_POST;
+        $user = self::stringValue($body['user'] ?? '');
+        $pass = self::stringValue($body['pass'] ?? '');
+        $remember = filter_var(self::stringValue($body['remember'] ?? ''), FILTER_VALIDATE_BOOLEAN);
+        if ($user === '' || $pass === '' || !Auth::attempt($user, $pass, $remember)) {
+            App::err('Unauthorized', 401);
+        }
+        App::json(['ok' => true, 'user' => App::config('auth_user')]);
+    }
+
+    public static function logout(): void
+    {
+        Auth::logout();
+        App::json(['ok' => true]);
+    }
+
+    public static function auth(): void
+    {
+        App::json([
+            'authenticated' => Auth::check(),
+            'user' => Auth::check() && Auth::enabled() ? App::config('auth_user') : null,
+        ]);
+    }
+
+    public static function ping(): void
+    {
+        App::json(['ok' => true]);
+    }
+
+    public static function artists(): void
+    {
+        $db = App::pdo();
+        $letters = $db->query('SELECT UPPER(SUBSTR(a.name,1,1)) AS l, COUNT(*) AS c
+                                FROM artists a GROUP BY l ORDER BY l')->fetchAll();
+        App::json(['letters' => $letters, 'total' => (int) $db->query('SELECT COUNT(*) FROM artists')->fetchColumn()]);
+    }
+
+    public static function artistsByLetter(): void
+    {
+        $letter = $_GET['letter'] ?? 'A';
+        $db = App::pdo();
+        $st = $db->prepare('SELECT a.id, a.name, a.art_path, COUNT(s.id) AS song_count
+                             FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
+                             WHERE UPPER(SUBSTR(a.name,1,1)) = ?
+                             GROUP BY a.id ORDER BY a.name');
+        $st->execute([$letter]);
+        App::json($st->fetchAll());
+    }
+
+    public static function albums(): void
+    {
+        $page  = max(1, self::integerValue($_GET['page'] ?? 1, 1));
+        $limit = 240;
+        $offset = ($page - 1) * $limit;
+        $db = App::pdo();
+        $where = '';
+        $params = [];
+        if (isset($_GET['artist_id'])) {
+            $where = 'WHERE al.artist_id = ?';
+            $params[] = self::integerValue($_GET['artist_id']);
+        }
+        if (isset($_GET['letter'])) {
+            $where .= ($where ? ' AND ' : 'WHERE ') . 'UPPER(SUBSTR(a.name,1,1)) = ?';
+            $params[] = $_GET['letter'];
+        }
+        $st = $db->prepare("SELECT al.id, al.name, al.year, al.art_path,
+                             a.name AS artist_name, a.id AS artist_id,
+                             (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id=al.id) AS song_count
+                             FROM albums al JOIN artists a ON a.id = al.artist_id
+                             $where ORDER BY a.name, al.name
+                             LIMIT $limit OFFSET $offset");
+        $st->execute($params);
+        $totalSt = $db->prepare("SELECT COUNT(*)
+                                  FROM albums al JOIN artists a ON a.id=al.artist_id $where");
+        $totalSt->execute($params);
+        App::json(['albums' => $st->fetchAll(), 'total' => (int) $totalSt->fetchColumn(), 'page' => $page]);
+    }
+
+    public static function artist(string $id): void
+    {
+        $db = App::pdo();
+        $st = $db->prepare('SELECT * FROM artists WHERE id = ?');
+        $st->execute([$id]);
+        $artist = $st->fetch();
+        if (!$artist) {
+            App::err('Artist not found', 404);
+        }
+        $st = $db->prepare('SELECT id, name, year, art_path,
+                             (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id=al.id) AS song_count
+                             FROM albums al WHERE artist_id = ? ORDER BY al.name');
+        $st->execute([$id]);
+        $artist['albums'] = $st->fetchAll();
+        App::json($artist);
+    }
+
+    public static function album(string $id): void
+    {
+        $db = App::pdo();
+        $st = $db->prepare('SELECT al.*, a.name AS artist_name, a.id AS artist_id
+                             FROM albums al JOIN artists a ON a.id = al.artist_id
+                             WHERE al.id = ?');
+        $st->execute([$id]);
+        $album = $st->fetch();
+        if (!$album) {
+            App::err('Album not found', 404);
+        }
+        $st = $db->prepare('SELECT id, title, track, disc, duration, bitrate, size, path
+                             FROM songs WHERE album_id = ?
+                             ORDER BY disc, track');
+        $st->execute([$id]);
+        $album['songs'] = $st->fetchAll();
+        $st = $db->prepare('SELECT MIN(path) FROM songs WHERE album_id = ?');
+        $st->execute([$id]);
+        $first = $st->fetchColumn();
+        $album['path'] = is_string($first)
+            ? substr(dirname($first), strlen(App::musicRoot()))
+            : null;
+        App::json($album);
+    }
+
+    public static function albumUpdate(string $id): void
+    {
+        $db = App::pdo();
+        $st = $db->prepare('SELECT al.* FROM albums al WHERE al.id = ?');
+        $st->execute([$id]);
+        $album = $st->fetch();
+        if (!$album) {
+            App::err('Album not found', 404);
+        }
+
+        $body = file_get_contents('php://input');
+        $query = self::stringValue($_SERVER['QUERY_STRING'] ?? '');
+        $input = [];
+        parse_str(is_string($body) && $body !== '' ? $body : $query, $input);
+        $name = $input['name'] ?? $_GET['name'] ?? null;
+        $year = array_key_exists('year', $input) ? $input['year'] : ($_GET['year'] ?? null);
+
+        $changes = [];
+        $newName = null;
+        $newYear = null;
+
+        if (is_string($name)) {
+            $newName = trim(preg_replace('/\s+/', ' ', $name) ?? '');
+            if ($newName === '' || mb_strlen($newName) > 200) {
+                App::err('Le nom de l\'album doit contenir entre 1 et 200 caractères', 400);
+            }
+            $changes['name'] = $newName;
+        }
+        if ($year !== null) {
+            $year = trim(self::stringValue($year));
+            if ($year === '') {
+                $newYear = null;
+                $changes['year'] = null;
+            } elseif (!preg_match('/^\d{1,4}$/', $year)) {
+                App::err('L\'année doit être un nombre à 4 chiffres', 400);
+            } else {
+                $y = (int) $year;
+                if ($y < 1 || $y > (int) date('Y')) {
+                    App::err('L\'année doit être comprise entre 1 et ' . date('Y'), 400);
+                }
+                $newYear = $y;
+                $changes['year'] = $y;
+            }
+        }
+        if (!$changes) {
+            App::err('Aucune modification fournie (name ou year attendus)', 400);
+        }
+
+        $albumId = self::integerValue($album['id']);
+        $artistId = self::integerValue($album['artist_id']);
+
+        if (array_key_exists('name', $changes) && $newName !== $album['name']) {
+            $st = $db->prepare('SELECT id FROM albums WHERE artist_id = ? AND name = ? AND id != ?');
+            $st->execute([$artistId, $newName, $albumId]);
+            if ($st->fetchColumn() !== false) {
+                App::err('Un album portant ce nom existe déjà pour cet artiste', 409);
+            }
+        }
+
+        $set = [];
+        $params = [];
+        foreach ($changes as $col => $value) {
+            $set[] = "$col = ?";
+            $params[] = $value;
+        }
+        $params[] = $albumId;
+        $db->prepare('UPDATE albums SET ' . implode(', ', $set) . ' WHERE id = ?')
+            ->execute($params);
+
+        $name = $newName ?? $album['name'];
+        $dbYear = $album['year'] !== null ? self::integerValue($album['year']) : null;
+        $year = array_key_exists('year', $changes) ? $newYear : $dbYear;
+
+        App::json(['ok' => true, 'id' => $albumId, 'name' => $name, 'year' => $year]);
+    }
+
+    public static function albumDelete(string $id): void
+    {
+        $db = App::pdo();
+        $st = $db->prepare('SELECT al.*, a.name AS artist_name
+                            FROM albums al JOIN artists a ON a.id = al.artist_id
+                            WHERE al.id = ?');
+        $st->execute([$id]);
+        $album = $st->fetch();
+        if (!$album) {
+            App::err('Album not found', 404);
+        }
+
+        $musicRoot = App::musicRoot() . DIRECTORY_SEPARATOR;
+
+        $st = $db->prepare('SELECT path FROM songs WHERE album_id = ?');
+        $st->execute([$id]);
+        $paths = $st->fetchAll(PDO::FETCH_COLUMN);
+
+        $deletedFiles = 0;
+        foreach ($paths as $p) {
+            if (is_string($p) && str_starts_with($p, $musicRoot) && is_file($p) && @unlink($p)) {
+                $deletedFiles++;
+            }
+        }
+        $cover = $album['art_path'] ?? null;
+        if (is_string($cover) && str_starts_with($cover, $musicRoot) && is_file($cover)) {
+            @unlink($cover);
+        }
+
+        $db->prepare('DELETE FROM albums WHERE id = ?')->execute([$id]);
+
+        $st = $db->prepare('SELECT COUNT(*) FROM albums WHERE artist_id = ?');
+        $st->execute([$album['artist_id']]);
+        if ((int) $st->fetchColumn() === 0) {
+            $st = $db->prepare('SELECT art_path FROM artists WHERE id = ?');
+            $st->execute([$album['artist_id']]);
+            $artistArt = $st->fetchColumn();
+            $db->prepare('DELETE FROM artists WHERE id = ?')->execute([$album['artist_id']]);
+            if (is_string($artistArt) && str_starts_with($artistArt, $musicRoot) && is_file($artistArt)) {
+                @unlink($artistArt);
+            }
+        }
+
+        App::json(['ok' => true, 'songs' => count($paths), 'files_deleted' => $deletedFiles]);
+    }
+
+    public static function song(string $id): void
+    {
+        $db = App::pdo();
+        $st = $db->prepare('SELECT s.*, a.name AS artist_name, a.id AS artist_id,
+                             al.name AS album_name, al.id AS album_id, al.art_path
+                             FROM songs s
+                             JOIN artists a ON a.id = s.artist_id
+                             JOIN albums al ON al.id = s.album_id
+                             WHERE s.id = ?');
+        $st->execute([$id]);
+        $song = $st->fetch();
+        if (!$song) {
+            App::err('Song not found', 404);
+        }
+        App::json($song);
+    }
+
+    public static function search(): void
+    {
+        $q = self::stringValue($_GET['q'] ?? '');
+        if (mb_strlen($q) < 2) {
+            App::err('Query too short');
+        }
+        $db = App::pdo();
+        $like = '%' . $q . '%';
+        $st = $db->prepare("SELECT s.id, s.title, 'song' AS type, a.name AS artist_name,
+                                  al.name AS album_name
+                            FROM songs s
+                            JOIN artists a ON a.id = s.artist_id
+                            JOIN albums al ON al.id = s.album_id
+                            WHERE s.title LIKE ? OR a.name LIKE ? OR al.name LIKE ?
+                            ORDER BY s.title LIMIT 30");
+        $st->execute([$like, $like, $like]);
+        $songs = $st->fetchAll();
+
+        $st = $db->prepare("SELECT id, name, 'artist' AS type FROM artists
+                            WHERE name LIKE ? ORDER BY name LIMIT 20");
+        $st->execute([$like]);
+        $artists = $st->fetchAll();
+
+        $st = $db->prepare("SELECT id, name, 'album' AS type FROM albums
+                            WHERE name LIKE ? ORDER BY name LIMIT 20");
+        $st->execute([$like]);
+        $albums = $st->fetchAll();
+
+        App::json(['songs' => $songs, 'artists' => $artists, 'albums' => $albums]);
+    }
+
+    public static function random(): void
+    {
+        $n = min(200, max(1, self::integerValue($_GET['n'] ?? 100, 100)));
+        $off = max(0, self::integerValue($_GET['offset'] ?? 0));
+        $st = App::pdo()->prepare('SELECT s.id, s.title, s.duration, s.bitrate,
+                                          a.name AS artist_name, a.id AS artist_id,
+                                          al.name AS album_name, al.id AS album_id, al.art_path
+                                   FROM songs s
+                                   JOIN artists a ON a.id = s.artist_id
+                                   JOIN albums al ON al.id = s.album_id
+                                   ORDER BY RANDOM() LIMIT ? OFFSET ?');
+        $st->execute([$n, $off]);
+        App::json($st->fetchAll());
+    }
+
+    public static function play(string $id): void
+    {
+        App::pdo()->prepare('UPDATE songs SET play_count = play_count + 1, last_played = datetime(\'now\') WHERE id = ?')
+            ->execute([(int) $id]);
+        App::json(['ok' => true]);
+    }
+
+    public static function top(): void
+    {
+        $db = App::pdo();
+        $songs = $db->prepare('SELECT s.id, s.title, s.duration, s.play_count, s.last_played,
+                                      a.name AS artist_name,
+                                      al.name AS album_name, al.id AS album_id
+                               FROM songs s
+                               JOIN artists a ON a.id = s.artist_id
+                               JOIN albums al ON al.id = s.album_id
+                               WHERE s.play_count > 0
+                               ORDER BY s.play_count DESC, s.last_played DESC
+                               LIMIT 50');
+        $songs->execute();
+        $albums = $db->query('SELECT al.id, al.name, al.year, al.art_path,
+                                     a.name AS artist_name, SUM(s.play_count) AS plays,
+                                     COUNT(s.id) AS song_count
+                              FROM albums al
+                              JOIN artists a ON a.id = al.artist_id
+                              JOIN songs s ON s.album_id = al.id
+                              WHERE s.play_count > 0
+                              GROUP BY al.id
+                              ORDER BY plays DESC
+                              LIMIT 25')->fetchAll();
+        $total = (int) $db->query('SELECT COALESCE(SUM(play_count),0) FROM songs')->fetchColumn();
+        App::json(['songs' => $songs->fetchAll(), 'albums' => $albums, 'total_plays' => $total]);
+    }
+
+    public static function recent(): void
+    {
+        $st = App::pdo()->prepare('SELECT s.id, s.title, s.last_played,
+                                          a.name AS artist_name,
+                                          al.name AS album_name, al.id AS album_id
+                                   FROM songs s
+                                   JOIN artists a ON a.id = s.artist_id
+                                   JOIN albums al ON al.id = s.album_id
+                                   WHERE s.last_played IS NOT NULL
+                                   ORDER BY s.last_played DESC
+                                   LIMIT 60');
+        $st->execute();
+        App::json($st->fetchAll());
+    }
+
+    public static function art(string $id): void
+    {
+        $db = App::pdo();
+        // Distinguer artiste et album : leurs identifiants n'appartiennent pas au même espace
+        if (($_GET['type'] ?? '') === 'artist') {
+            $st = $db->prepare('SELECT art_path FROM artists WHERE id = ?');
+            $st->execute([$id]);
+            $path = $st->fetchColumn();
+            if (!is_string($path) || !file_exists($path)) {
+                $st = $db->prepare(
+                    'SELECT al.art_path
+                       FROM albums al
+                      WHERE al.artist_id = ? AND al.art_path IS NOT NULL
+                      ORDER BY (SELECT COUNT(*) FROM songs s WHERE s.album_id = al.id) DESC,
+                               al.year DESC, al.id
+                    '
+                );
+                $st->execute([$id]);
+                $path = null;
+                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $candidate) {
+                    if (is_string($candidate) && file_exists($candidate)) {
+                        $path = $candidate;
+                        break;
+                    }
+                }
+            }
+        } else {
+            $st = $db->prepare('SELECT art_path FROM albums WHERE id = ?');
+            $st->execute([$id]);
+            $path = $st->fetchColumn();
+        }
+        if (!is_string($path) || !file_exists($path)) {
+            http_response_code(404);
+            exit;
+        }
+        $mime = 'image/jpeg';
+        if (str_ends_with(strtolower($path), '.png')) {
+            $mime = 'image/png';
+        }
+        header('Content-Type: ' . $mime);
+        header('Cache-Control: public, max-age=86400');
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') {
+            return;
+        }
+        readfile($path);
+    }
+
+    public static function stream(string $id): void
+    {
+        $db = App::pdo();
+        $st = $db->prepare('SELECT path, size, bitrate FROM songs WHERE id = ?');
+        $st->execute([$id]);
+        $song = $st->fetch();
+        if (!$song) {
+            App::err('Not found', 404);
+        }
+        $file = self::stringValue($song['path'] ?? null);
+        if (!file_exists($file)) {
+            App::err('File missing', 404);
+        }
+
+        $transcode = self::integerValue($_GET['transcode'] ?? App::transcodeBitrate());
+        $start = max(0.0, (float) self::stringValue($_GET['start'] ?? 0, '0'));
+        $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+        $isMp3 = in_array($ext, ['mp3']);
+        $needsTranscode = $transcode > 0 && function_exists('proc_open');
+
+        header('Accept-Ranges: bytes');
+        header('Connection: close');
+
+        if ($needsTranscode && !$isMp3) {
+            Streamer::transcode($file, $transcode, $start);
+        } else {
+            Streamer::direct($file);
+        }
+    }
+
+    public static function favorites(): void
+    {
+        $db = App::pdo();
+        $action = $_GET['action'] ?? null;
+        $songId = $_GET['id'] ?? null;
+
+        if ($action === 'add' && $songId) {
+            $db->prepare('INSERT OR IGNORE INTO favorites(song_id) VALUES(?)')
+               ->execute([$songId]);
+        } elseif ($action === 'remove' && $songId) {
+            $db->prepare('DELETE FROM favorites WHERE song_id = ?')->execute([$songId]);
+        } elseif ($action === 'check' && $songId) {
+            $st = $db->prepare('SELECT 1 FROM favorites WHERE song_id = ?');
+            $st->execute([$songId]);
+            App::json(['favorited' => (bool) $st->fetch()]);
+        }
+
+        $st = $db->query('SELECT s.id, s.title, s.duration, s.path,
+                          a.name AS artist_name, a.id AS artist_id,
+                          al.name AS album_name, al.id AS album_id, al.art_path
+                          FROM favorites f
+                          JOIN songs s ON s.id = f.song_id
+                          JOIN artists a ON a.id = s.artist_id
+                          JOIN albums al ON al.id = s.album_id
+                          ORDER BY f.created_at DESC');
+        App::json($st->fetchAll());
+    }
+
+    public static function genres(): void
+    {
+        $db = App::pdo();
+        $st = $db->query("SELECT genre, COUNT(*) AS album_count,
+                          (SELECT COUNT(*) FROM songs s2 JOIN albums al2 ON al2.id = s2.album_id WHERE al2.genre = albums.genre) AS song_count
+                          FROM albums WHERE genre IS NOT NULL AND genre != ''
+                          GROUP BY genre ORDER BY genre");
+        App::json($st->fetchAll());
+    }
+
+    public static function home(): void
+    {
+        $db = App::pdo();
+
+        $genres = $db->query("SELECT genre, COUNT(*) AS album_count,
+                              (SELECT COUNT(*) FROM songs s2 JOIN albums al2 ON al2.id = s2.album_id WHERE al2.genre = albums.genre) AS song_count
+                              FROM albums WHERE genre IS NOT NULL AND genre != ''
+                              GROUP BY genre ORDER BY genre")->fetchAll();
+
+        $artists = $db->query('SELECT a.id, a.name, COUNT(s.id) AS song_count
+                               FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
+                               GROUP BY a.id ORDER BY RANDOM() LIMIT 8')->fetchAll();
+
+        $albums = $db->query('SELECT al.id, al.name, al.year, a.name AS artist_name, a.id AS artist_id,
+                                     (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id = al.id) AS song_count
+                              FROM albums al JOIN artists a ON a.id = al.artist_id
+                              ORDER BY RANDOM() LIMIT 8')->fetchAll();
+
+        $recent = $db->query('SELECT s.id, s.title, s.last_played,
+                                     a.name AS artist_name,
+                                     al.name AS album_name, al.id AS album_id
+                              FROM songs s
+                              JOIN artists a ON a.id = s.artist_id
+                              JOIN albums al ON al.id = s.album_id
+                              WHERE s.last_played IS NOT NULL
+                              ORDER BY s.last_played DESC LIMIT 10')->fetchAll();
+
+        $poche = $db->query('SELECT s.id, s.title, s.duration,
+                                 a.name AS artist_name,
+                                 al.name AS album_name, al.id AS album_id
+                          FROM favorites f
+                          JOIN songs s ON s.id = f.song_id
+                          JOIN artists a ON a.id = s.artist_id
+                          JOIN albums al ON al.id = s.album_id
+                          ORDER BY f.created_at DESC LIMIT 8')->fetchAll();
+
+        $covers = $db->query('SELECT al.id, al.name, a.name AS artist_name
+                              FROM albums al
+                              JOIN artists a ON a.id = al.artist_id
+                              JOIN songs s ON s.album_id = al.id
+                              WHERE s.last_played IS NOT NULL
+                              GROUP BY al.id
+                              ORDER BY MAX(s.last_played) DESC
+                              LIMIT 12')->fetchAll();
+
+        App::json(['genres' => $genres, 'artists' => $artists, 'albums' => $albums, 'recent' => $recent, 'poche' => $poche, 'covers' => $covers]);
+    }
+
+    public static function genre(): void
+    {
+        $name = self::stringValue($_GET['name'] ?? '');
+        if ($name === '') {
+            App::err('Genre name required');
+        }
+        $db = App::pdo();
+        $st = $db->prepare('SELECT al.id, al.name, al.year, al.art_path,
+                            a.name AS artist_name, a.id AS artist_id,
+                            (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id = al.id) AS song_count
+                            FROM albums al JOIN artists a ON a.id = al.artist_id
+                            WHERE al.genre = ? ORDER BY a.name, al.name');
+        $st->execute([$name]);
+        $albums = $st->fetchAll();
+        $totalSongs = 0;
+        foreach ($albums as $a) {
+            if (is_array($a)) {
+                $totalSongs += self::integerValue($a['song_count'] ?? null);
+            }
+        }
+        App::json(['genre' => $name, 'albums' => $albums, 'total_albums' => count($albums), 'total_songs' => $totalSongs]);
+    }
+
+    public static function settings(): void
+    {
+        $db = App::pdo();
+        $requestMethod = self::stringValue($_SERVER['REQUEST_METHOD'] ?? 'GET', 'GET');
+        if ($requestMethod === 'PUT' || isset($_GET['set_key'])) {
+            $body = file_get_contents('php://input');
+            $query = self::stringValue($_SERVER['QUERY_STRING'] ?? '');
+            parse_str(is_string($body) && $body !== '' ? $body : $query, $input);
+            $key   = $input['key'] ?? $_GET['set_key'] ?? null;
+            $value = $input['value'] ?? $_GET['value'] ?? null;
+            if (is_string($key) && $key !== '' && (is_string($value) || $value === null)) {
+                DB::setSetting($key, $value);
+                App::json(['ok' => true]);
+            }
+        }
+        $st = $db->query('SELECT key, value FROM settings');
+        $settings = [];
+        while (($row = $st->fetch()) !== false) {
+            $key = $row['key'] ?? null;
+            $value = $row['value'] ?? null;
+            if (is_string($key) && (is_string($value) || $value === null)) {
+                $settings[$key] = $value;
+            }
+        }
+        App::json($settings);
+    }
+
+    public static function diag(): void
+    {
+        $body = file_get_contents('php://input');
+        $input = is_string($body) && $body !== '' ? json_decode($body, true) : null;
+        if (!is_array($input) && isset($_POST['log']) && is_string($_POST['log'])) {
+            $input = json_decode($_POST['log'], true);
+        }
+        $log = is_array($input) ? ($input['log'] ?? null) : null;
+        if (!is_array($log)) {
+            App::err('Invalid diagnostic payload');
+        }
+        $safe = [];
+        foreach (array_slice($log, 0, 500) as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $safe[] = [
+                't'   => self::stringValue($entry['t'] ?? ''),
+                'e'   => self::stringValue($entry['e'] ?? ''),
+                'd'   => self::stringValue($entry['d'] ?? ''),
+                'h'   => self::integerValue($entry['h'] ?? 0),
+                'ct'  => (float) self::integerValue($entry['ct'] ?? 0),
+                'ns'  => self::integerValue($entry['ns'] ?? -1),
+                'rs'  => self::integerValue($entry['rs'] ?? -1),
+                'buf' => (float) self::integerValue($entry['buf'] ?? 0),
+            ];
+        }
+        if ($safe === []) {
+            App::err('Empty diagnostic payload');
+        }
+        $dbPath = App::config('db_path');
+        if (!is_string($dbPath) || $dbPath === '') {
+            App::err('Database path unavailable', 500);
+        }
+        $dir = dirname($dbPath);
+        if (!is_dir($dir)) {
+            App::err('Diagnostic directory unavailable', 500);
+        }
+        $file = $dir . '/diag-' . date('Ymd-His') . '-' . substr((string) random_int(0, PHP_INT_MAX), 0, 6) . '.json';
+        $payload = json_encode($safe, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $written = false;
+        if (is_string($payload) && file_put_contents($file, $payload . PHP_EOL, LOCK_EX) !== false) {
+            $written = true;
+        }
+        App::json(['ok' => true, 'written' => $written]);
+    }
+
+    private static function stringValue(mixed $value, string $default = ''): string
+    {
+        return is_string($value) ? $value : $default;
+    }
+
+    private static function integerValue(mixed $value, int $default = 0): int
+    {
+        return is_int($value) || is_numeric($value) ? (int) $value : $default;
+    }
+}
