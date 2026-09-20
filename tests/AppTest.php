@@ -17,6 +17,25 @@ final class AppTest extends TestCase
         self::assertSame('&lt;b&gt;&quot;Muzik&quot;&lt;/b&gt;', App::e('<b>"Muzik"</b>'));
     }
 
+    public function testNormalizeGenreMergesFamiliesAndDropsJunk(): void
+    {
+        self::assertSame('Rap/Hip Hop', App::normalizeGenre('rap/hip hop'));
+        self::assertSame('Rap/Hip Hop', App::normalizeGenre('Hip-Hop/Rap'));
+        self::assertSame('Rock', App::normalizeGenre('rock / hard rock / metal'));
+        self::assertSame('Rock', App::normalizeGenre('Métal'));
+        self::assertSame('Films/Jeux vidéo', App::normalizeGenre('films/jeux vidéo'));
+        self::assertSame('Films/Jeux vidéo', App::normalizeGenre('Bande originale'));
+        self::assertSame('Humour / Parlé', App::normalizeGenre('humour / parlé'));
+        self::assertSame('Humour / Parlé', App::normalizeGenre('Spoken Word'));
+        self::assertSame('Electro', App::normalizeGenre('Deep House'));
+        self::assertSame('Easy Listening', App::normalizeGenre(' easy listening '));
+        self::assertSame('Easy Listening', App::normalizeGenre('1 easy listening'));
+        self::assertNull(App::normalizeGenre('unknown'));
+        self::assertNull(App::normalizeGenre(''));
+        self::assertNull(App::normalizeGenre('   '));
+        self::assertNull(App::normalizeGenre(null));
+    }
+
     public function testJsonAndErrorResponsesCanBeCaptured(): void
     {
         $response = $this->captureJson(static fn() => App::json(['é' => '/'], 201));

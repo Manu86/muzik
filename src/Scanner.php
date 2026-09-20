@@ -132,7 +132,8 @@ final class Scanner
                     $albumName2,
                     $info['year'] ?? null,
                     $artistPath,
-                    $albumArt
+                    $albumArt,
+                    $info['genre'] ?? ''
                 );
             }
             $this->upsertSong($info, $artistId, $albumId, $seen);
@@ -165,7 +166,7 @@ final class Scanner
 
         $artistId = $this->ensureArtist($artistName, $albumBase, $container);
         $art = $this->findArt($albumBase) ?: $this->findArt(dirname($albumBase)) ?: $this->findArt($container);
-        $albumId = $this->ensureAlbum($artistId, $albumName, $info['year'] ?? null, $albumBase, $art);
+        $albumId = $this->ensureAlbum($artistId, $albumName, $info['year'] ?? null, $albumBase, $art, $info['genre'] ?? '');
         $this->upsertSong($info, $artistId, $albumId, $seen);
     }
 
@@ -224,6 +225,7 @@ final class Scanner
             'bitrate' => null,
             'artist' => '',
             'album' => '',
+            'genre' => '',
         ];
 
         try {
@@ -237,6 +239,7 @@ final class Scanner
                     $info['album'] = $this->tagValue($this->firstTag($tags, 'album'), 'album');
                     $info['artist'] = $this->tagValue($this->firstTag($tags, 'artist'), 'artist');
                     $info['title'] = $this->tagValue($this->firstTag($tags, 'title'), 'title');
+                    $info['genre'] = App::normalizeGenre($this->firstTag($tags, 'genre')) ?? '';
                     if ($info['title'] === '') {
                         $info['title'] = null;
                     }
@@ -377,25 +380,32 @@ final class Scanner
         string $name,
         ?int $year,
         string $path,
-        ?string $art
+        ?string $art,
+        ?string $genre = null
     ): int {
         $name = $this->clean($name);
         if ($name === '') {
             $name = 'Sans album';
         }
-        $st = App::pdo()->prepare('SELECT id FROM albums WHERE artist_id = ? AND name = ? COLLATE NOCASE');
+        $genre = $genre !== null ? trim($genre) : '';
+        $st = App::pdo()->prepare('SELECT id, genre FROM albums WHERE artist_id = ? AND name = ? COLLATE NOCASE');
         $st->execute([$artistId, $name]);
-        $id = $st->fetchColumn();
-        if ($id !== false) {
-            if ($art && !$this->albumHasArt((int) $id)) {
+        $row = $st->fetch();
+        if (is_array($row)) {
+            $id = $this->integer($row['id'] ?? null);
+            if ($art && !$this->albumHasArt($id)) {
                 App::pdo()->prepare('UPDATE albums SET art_path = ? WHERE id = ?')
                     ->execute([$art, $id]);
             }
-            return (int) $id;
+            if ($genre !== '' && ($row['genre'] === null || $row['genre'] === '')) {
+                App::pdo()->prepare('UPDATE albums SET genre = ? WHERE id = ?')
+                    ->execute([$genre, $id]);
+            }
+            return $id;
         }
-        $ins = App::pdo()->prepare('INSERT INTO albums(artist_id, name, year, path, art_path)
-                                    VALUES(?,?,?,?,?)');
-        $ins->execute([$artistId, $name, $year, $path, $art]);
+        $ins = App::pdo()->prepare('INSERT INTO albums(artist_id, name, year, path, art_path, genre)
+                                    VALUES(?,?,?,?,?,?)');
+        $ins->execute([$artistId, $name, $year, $path, $art, $genre !== '' ? $genre : null]);
         return (int) App::pdo()->lastInsertId();
     }
 

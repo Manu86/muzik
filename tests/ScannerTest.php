@@ -127,13 +127,14 @@ final class ScannerTest extends TestCase
         ob_end_clean();
 
         $indexed = App::pdo()->query(
-            'SELECT s.title, s.track, a.name AS artist, al.name AS album, al.year, s.mtime
+            'SELECT s.title, s.track, a.name AS artist, al.name AS album, al.year, al.genre, s.mtime
              FROM songs s JOIN artists a ON a.id = s.artist_id JOIN albums al ON al.id = s.album_id'
         )->fetch();
         self::assertIsArray($indexed);
         self::assertSame('Tagged title', $indexed['title']);
         self::assertSame('Tagged artist', $indexed['artist']);
         self::assertSame('Tagged album', $indexed['album']);
+        self::assertSame('Rock', $indexed['genre']);
         self::assertIsNumeric($indexed['year']);
         self::assertIsNumeric($indexed['track']);
         self::assertSame(2004, (int) $indexed['year']);
@@ -147,6 +148,28 @@ final class ScannerTest extends TestCase
         ob_end_clean();
         self::assertSame($newMtime, (int) App::pdo()->query('SELECT mtime FROM songs')->fetchColumn());
         self::assertSame(1, (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn());
+    }
+
+    public function testEnsureAlbumStoresAndBackfillsGenre(): void
+    {
+        $this->initialiseApp($this->temporaryDirectory . '/music');
+        $pdo = App::pdo();
+        $pdo->exec("INSERT INTO artists(name, path) VALUES('Artist', '/x')");
+        $artistId = (int) $pdo->lastInsertId();
+
+        $albumId = $this->invoke('ensureAlbum', $artistId, 'Album', null, '/x', null, 'Pop');
+        self::assertIsInt($albumId);
+        self::assertNotSame(0, $albumId);
+        self::assertSame('Pop', (string) $pdo->query("SELECT genre FROM albums WHERE id = $albumId")->fetchColumn());
+
+        $again = $this->invoke('ensureAlbum', $artistId, 'Album', null, '/x', null, '');
+        self::assertSame($albumId, $again);
+        self::assertSame('Pop', (string) $pdo->query("SELECT genre FROM albums WHERE id = $albumId")->fetchColumn());
+
+        $pdo->exec("INSERT INTO albums(artist_id, name, genre, path) VALUES($artistId, 'Album 2', '', '/x')");
+        $album2 = (int) $pdo->lastInsertId();
+        $this->invoke('ensureAlbum', $artistId, 'Album 2', null, '/x', null, 'Jazz');
+        self::assertSame('Jazz', (string) $pdo->query("SELECT genre FROM albums WHERE id = $album2")->fetchColumn());
     }
 
     private function invoke(string $method, mixed ...$arguments): mixed

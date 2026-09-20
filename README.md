@@ -158,6 +158,11 @@ php bin/scan.php --full
 
 Formats reconnus : MP3, FLAC, OGG, M4A et WAV.
 
+Titre, artiste, album, année et genre sont lus dans les tags ID3 des fichiers
+MP3 (id3v2, repli id3v1). Le genre est normalisé dans une liste canonique
+(`App::normalizeGenre()`), ce qui alimente l’onglet « Genres » dès la première
+indexation — y compris pendant l’installation.
+
 Le scanner privilégie les tags audio. Lorsque ceux-ci sont absents ou génériques, il déduit artiste, album, disque, numéro de piste et titre depuis l’arborescence et le nom du fichier.
 
 ## Enrichir les métadonnées
