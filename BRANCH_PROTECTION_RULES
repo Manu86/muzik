@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": 1,
+      "name": "Main branch protection",
+      "target": "branch",
+      "source_type": "Repository",
+      "source": "Manu86/muzik",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": ["main"],
+          "exclude": []
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        },
+        {
+          "type": "required_status_check",
+          "parameters": {
+            "status_check_names": [
+              "php (8.1)",
+              "php (8.4)"
+            ]
+          }
+        }
+      ],
+      "bypass_actors": []
+    }
+  ]
+}
