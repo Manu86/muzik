@@ -672,7 +672,6 @@ async function renderAlbumDetail(id, backView) {
           <button id="play-all" class="play-all" type="button">▶ Tout lire</button>
           <button id="add-to-queue" class="add-to-queue" type="button">Ajouter à la file d'attente</button>
           <button id="edit-album" class="add-to-queue" type="button">✏ Modifier</button>
-          <button id="delete-album" class="add-to-queue delete-album" type="button">Supprimer</button>
         </div>
       </div>
     </div>
@@ -695,7 +694,6 @@ async function renderAlbumDetail(id, backView) {
     if (wasEmpty) state.index = 0;
     openQueue();
   });
-  $('#delete-album').addEventListener('click', () => deleteAlbum(id));
   bindAlbumEdit(id, backView);
   bindTrackClick($('#view-album-detail'));
   $$('#view-album-detail .track-row').forEach(r => {
@@ -709,6 +707,7 @@ function bindAlbumEdit(id, backView) {
   $('#edit-album').addEventListener('click', () => {
     const album = state.currentAlbum;
     if (!album || String(album.id) !== String(id)) return;
+    if ($('#album-edit-form')) return;
     const info = $('#view-album-detail').querySelector('.album-hero-info');
     if (!info) return;
     const maxYear = new Date().getFullYear();
@@ -720,6 +719,7 @@ function bindAlbumEdit(id, backView) {
       <div class="album-edit-actions">
         <button id="edit-save" class="play-all" type="button">Enregistrer</button>
         <button id="edit-cancel" class="add-to-queue" type="button">Annuler</button>
+        <button id="delete-album" class="add-to-queue delete-album" type="button">Supprimer</button>
       </div>
       <p class="album-edit-hint">Modifie la base. Pour écrire dans les fichiers audio : php bin/album-edit.php ${id} --apply</p>`;
     const title = info.querySelector('h1');
@@ -730,6 +730,7 @@ function bindAlbumEdit(id, backView) {
     info.insertBefore(form, artist ? artist.nextSibling : null);
     $('#edit-cancel').addEventListener('click', () => renderAlbumDetail(id, backView));
     $('#edit-save').addEventListener('click', () => saveAlbumEdit(id, backView));
+    $('#delete-album').addEventListener('click', () => deleteAlbum(id));
   });
 }
 
