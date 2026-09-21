@@ -25,12 +25,6 @@ Muzik est un lecteur de musique web auto-hébergé. Il indexe une bibliothèque 
   <a href="docs/screenshots/muzik-genres.png">
     <img src="docs/screenshots/muzik-genres.png" alt="Genres" width="15%">
   </a>
-  <a href="docs/screenshots/muzik-plus-ecoutes.png">
-    <img src="docs/screenshots/muzik-plus-ecoutes.png" alt="Plus écoutés" width="15%">
-  </a>
-  <a href="docs/screenshots/muzik-recemment-ecoute.png">
-    <img src="docs/screenshots/muzik-recemment-ecoute.png" alt="Récemment écouté" width="15%">
-  </a>
   <a href="docs/screenshots/muzik-selection-aleatoire.png">
     <img src="docs/screenshots/muzik-selection-aleatoire.png" alt="Sélection aléatoire" width="15%">
   </a>
