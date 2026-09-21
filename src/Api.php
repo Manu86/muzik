@@ -639,6 +639,28 @@ final class Api
         App::json(['ok' => true, 'written' => $written]);
     }
 
+    /**
+     * Relance une indexation incrémentale de la bibliothèque en arrière-plan.
+     *
+     * Renvoie { "ok": false, "running": true } si une analyse est déjà en
+     * cours. Le scan n'est jamais effectué dans la requête HTTP : il est
+     * détaché via {@see Scanner::startBackgroundScan()}.
+     *
+     * @param string|null $projectRoot Racine du projet, redéfinissable en test.
+     */
+    public static function scan(?string $projectRoot = null): void
+    {
+        if (DB::setting('scan_running') === '1') {
+            App::json(['ok' => false, 'running' => true]);
+        }
+        if (!Scanner::startBackgroundScan($projectRoot ?? dirname(__DIR__))) {
+            App::err("Impossible de lancer le scan d'arrière-plan", 500);
+        }
+        DB::setSetting('scan_running', '1');
+        DB::setSetting('scan_started_at', (string) time());
+        App::json(['ok' => true]);
+    }
+
     private static function stringValue(mixed $value, string $default = ''): string
     {
         return is_string($value) ? $value : $default;

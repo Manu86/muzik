@@ -280,6 +280,33 @@ final class ApiTest extends TestCase
         self::assertSame('128', DB::setting('transcode'));
     }
 
+    public function testScanRefusesWhenAlreadyRunning(): void
+    {
+        DB::setSetting('scan_running', '1');
+        $response = $this->captureJson(static fn() => Api::scan());
+        self::assertSame(['ok' => false, 'running' => true], $response->data);
+        self::assertSame(200, $response->status);
+    }
+
+    public function testScanSpawnsBackgroundProcessAndRecordsStatus(): void
+    {
+        if (!function_exists('proc_open')) {
+            $this->markTestSkipped('proc_open est désactivé.');
+        }
+
+        mkdir($this->temporaryDirectory . '/bin', 0777, true);
+        file_put_contents($this->temporaryDirectory . '/bin/scan.php', "<?php\n");
+        mkdir($this->temporaryDirectory . '/data', 0777, true);
+
+        $response = $this->captureJson(fn() => Api::scan($this->temporaryDirectory));
+        self::assertSame(['ok' => true], $response->data);
+        self::assertSame('1', DB::setting('scan_running'));
+        self::assertNotNull(DB::setting('scan_started_at'));
+
+        usleep(300000);
+        self::assertFileExists($this->temporaryDirectory . '/data/scan-install.log');
+    }
+
     public function testStreamUsesTheIndexedFileAndReportsMissingFiles(): void
     {
         $_GET = ['transcode' => '0'];

@@ -34,6 +34,7 @@ final class Router
             ['api/favorites',           'favorites', 'GET'],
             ['api/settings',            'settings',  'GET'],
             ['api/diag',                'diag',      'POST'],
+            ['api/scan',                'scan',      'POST'],
             ['api/login',               'login',     'POST'],
             ['api/logout',              'logout',    'POST'],
             ['api/auth',                'auth',      'GET'],
@@ -114,6 +115,8 @@ final class Router
             case 'settings': Api::settings();
                 break;
             case 'diag': Api::diag();
+                break;
+            case 'scan': Api::scan();
                 break;
             case 'login': Api::login();
                 break;

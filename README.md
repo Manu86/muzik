@@ -158,6 +158,10 @@ php bin/scan.php --full
 
 Formats reconnus : MP3, FLAC, OGG, M4A et WAV.
 
+Depuis l’interface, la vue « Réglages » lance un rescannage incrémental en
+arrière-plan ; son état (en cours ou dernière exécution) est affiché en temps
+réel et visible via l’API `POST /api/scan`.
+
 Titre, artiste, album, année et genre sont lus dans les tags ID3 des fichiers
 MP3 (id3v2, repli id3v1). Le genre est normalisé dans une liste canonique
 (`App::normalizeGenre()`), ce qui alimente l’onglet « Genres » dès la première

@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json?v=3" crossorigin="use-credentials">
   <link rel="apple-touch-icon" href="assets/icon-192.png?v=3">
   <link rel="icon" href="assets/icon-192.png?v=3">
-  <link rel="stylesheet" href="assets/app.css?v=54">
+  <link rel="stylesheet" href="assets/app.css?v=56">
 </head>
 <body>
   <a class="skip-link" href="#content">Aller au contenu</a>
@@ -24,6 +24,7 @@
       <li><button class="nav-item" data-view="random" type="button"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="white" stroke="none"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></span><span class="nav-lbl">Aléatoire</span></button></li>
       <li><button class="nav-item" data-view="favorites" type="button"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="white" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span><span class="nav-lbl">Favoris</span></button></li>
       <li><a class="nav-item" id="nav-queue" href="#" data-view="queue" aria-pressed="false"><span class="nav-ico" aria-hidden="true">🎶</span><span class="nav-lbl">File d'attente</span></a></li>
+      <li id="nav-settings-item"><button class="nav-item" data-view="settings" type="button"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="white" stroke="none"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></span><span class="nav-lbl">Réglages</span></button></li>
       <li><button id="btn-logout" class="nav-item" type="button" hidden><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="17" height="17" fill="white" stroke="none"><path d="M13,3h-2v10h2V3z M17.83,5.17l-1.42,1.42C17.99,7.86,19,9.81,19,12c0,3.87-3.13,7-7,7s-7-3.13-7-7c0-2.19,1.01-4.14,2.58-5.42 L6.17,5.17C4.23,6.82,3,9.26,3,12c0,4.97,4.03,9,9,9s9-4.03,9-9C21,9.26,19.77,6.82,17.83,5.17z"/></svg></span><span class="nav-lbl">Déconnexion</span></button></li>
     </ul>
   </nav>
@@ -46,6 +47,7 @@
     <div id="view-recent" class="view"></div>
     <div id="view-random" class="view"></div>
     <div id="view-favorites" class="view"></div>
+    <div id="view-settings" class="view"></div>
     <div id="view-album-detail" class="view"></div>
     <div id="view-artist-detail" class="view"></div>
     </div>
@@ -106,6 +108,6 @@
     <img id="art-lightbox-img" src="" alt="">
   </div>
 
-  <script src="assets/app.js?v=65"></script>
+  <script src="assets/app.js?v=66"></script>
 </body>
 </html>

@@ -800,6 +800,38 @@ paths:
           $ref: '#/components/responses/Ok'
         '400':
           $ref: '#/components/responses/Error'
+  /api/scan:
+    post:
+      tags: [Bibliothèque]
+      summary: Relance l'indexation de la bibliothèque en arrière-plan
+      description: |
+        Détache `bin/scan.php` et retourne immédiatement. Si une analyse est
+        déjà en cours, renvoie `{ "ok": false, "running": true }` sans lancer
+        de nouveau processus. L'avancement est observable via
+        `GET /api/settings` (`scan_running`, `scan_started_at`, `scan_last_run`).
+      operationId: startScan
+      responses:
+        '200':
+          description: |
+            Scan lancé avec succès, ou déjà en cours.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Ok'
+                  - type: object
+                    required: [ok, running]
+                    properties:
+                      ok:
+                        const: false
+                      running:
+                        const: true
+        '500':
+          description: Aucun processus d'arrière-plan n'a pu être détaché.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   parameters:
     Id:

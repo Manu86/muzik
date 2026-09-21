@@ -38,6 +38,7 @@ require __DIR__ . '/../src/Installer.php';
 require __DIR__ . '/../src/Auth.php';
 require __DIR__ . '/../src/Router.php';
 require __DIR__ . '/../src/Api.php';
+require __DIR__ . '/../src/Scanner.php';
 require __DIR__ . '/../src/Streamer.php';
 
 App::initConfig(require __DIR__ . '/../config.php');

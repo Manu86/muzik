@@ -94,6 +94,25 @@ final class DocumentationTest extends TestCase
         }
     }
 
+    public function testIndexOfProductionLoadsEverySourceClass(): void
+    {
+        $root = dirname(__DIR__);
+        $index = file_get_contents($root . '/public/index.php');
+        self::assertNotFalse($index);
+
+        $sources = glob($root . '/src/*.php');
+        self::assertNotEmpty($sources);
+
+        foreach ($sources as $source) {
+            $class = basename($source);
+            self::assertStringContainsString(
+                "require __DIR__ . '/../src/{$class}';",
+                $index,
+                "public/index.php doit charger {$class}.",
+            );
+        }
+    }
+
     public function testPublishedConfigurationDoesNotContainPrivatePaths(): void
     {
         $root = dirname(__DIR__);
