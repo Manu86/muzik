@@ -22,7 +22,9 @@ Avant une modification, lire au minimum `README.md`, `composer.json` et les fich
 - `src/Api.php` exécute les requêtes SQL et construit les réponses.
 - `src/Streamer.php` traite les ranges HTTP et le transcodage FFmpeg.
 - `src/Scanner.php` parcourt `music_root` et interprète tags, dossiers et noms de fichiers.
-- `public/assets/app.js` contient l’état, le routage par hash, les vues et le lecteur.
+- `public/assets/js/app.js` initialise les modules du frontend ; `core.js` porte
+  l’état partagé, `views.js` le routage et les vues, `player.js` le lecteur,
+  `favorites.js` les favoris, et `account.js` l’authentification et les réglages.
 - `config/app.php` contient les valeurs portables ; `config.local.php`, ignoré
   par Git, surcharge la configuration sur la machine de l'utilisateur (valeurs
   globales, `auth_user`/`auth_hash` réservés à la migration initiale).

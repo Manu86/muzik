@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.json?v=3" crossorigin="use-credentials">
   <link rel="apple-touch-icon" href="assets/icon-192.png?v=3">
   <link rel="icon" href="assets/icon-192.png?v=3">
-  <link rel="stylesheet" href="assets/app.css?v=59">
+  <link rel="stylesheet" href="assets/css/app.css?v=62">
 </head>
 <body>
   <a class="skip-link" href="#content">Aller au contenu</a>
@@ -33,7 +33,10 @@
     <div id="topbar">
       <div id="search-box">
         <label for="search-input" id="search-label">Recherche</label>
-        <input id="search-input" placeholder="Artiste, album, piste…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+        <div id="search-control">
+          <input id="search-input" placeholder="Artiste, album, piste…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+          <button id="search-close" type="button" aria-label="Fermer la recherche" title="Fermer la recherche" hidden>&times;</button>
+        </div>
         <div id="search-results" role="listbox" aria-label="Résultats de recherche"></div>
       </div>
     </div>
@@ -108,6 +111,6 @@
     <img id="art-lightbox-img" src="" alt="">
   </div>
 
-  <script src="assets/app.js?v=74"></script>
+  <script type="module" src="assets/js/app.js?v=77"></script>
 </body>
 </html>

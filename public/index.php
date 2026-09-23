@@ -38,6 +38,7 @@ require __DIR__ . '/../src/Users.php';
 require __DIR__ . '/../src/Installer.php';
 require __DIR__ . '/../src/Auth.php';
 require __DIR__ . '/../src/Router.php';
+require __DIR__ . '/../src/Catalogue.php';
 require __DIR__ . '/../src/Api.php';
 require __DIR__ . '/../src/Scanner.php';
 require __DIR__ . '/../src/Streamer.php';
@@ -93,7 +94,7 @@ if ($routePath === '/login' || $routePath === '/login.html') {
 
 if ($routePath === '/') {
     header('Content-Type: text/html');
-    readfile(__DIR__ . '/index.html');
+    readfile(__DIR__ . '/app.html');
     return;
 }
 

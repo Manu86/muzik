@@ -56,36 +56,19 @@ final class Api
 
     public static function artists(): void
     {
-        $db = App::pdo();
-        $letters = $db->query('SELECT UPPER(SUBSTR(a.name,1,1)) AS l, COUNT(*) AS c
-                                FROM artists a GROUP BY l ORDER BY l')->fetchAll();
-        App::json(['letters' => $letters, 'total' => (int) $db->query('SELECT COUNT(*) FROM artists')->fetchColumn()]);
-    }
-
-    public static function artistsByLetter(): void
-    {
-        $letter = $_GET['letter'] ?? '';
-        $db = App::pdo();
-        if ($letter !== '') {
-            $st = $db->prepare('SELECT a.id, a.name, a.art_path, COUNT(s.id) AS song_count
-                                 FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
-                                 WHERE UPPER(SUBSTR(a.name,1,1)) = ?
-                                 GROUP BY a.id ORDER BY a.name');
-            $st->execute([$letter]);
-        } else {
-            $st = $db->query('SELECT a.id, a.name, a.art_path, COUNT(s.id) AS song_count
-                               FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
-                               GROUP BY a.id ORDER BY a.name');
+        if (isset($_GET['letter'])) {
+            App::json(Catalogue::artists(self::stringValue($_GET['letter'])));
         }
-        App::json($st->fetchAll());
+        App::json([
+            'letters' => Catalogue::artistLetters(),
+            'total' => Catalogue::artistCount(),
+        ]);
     }
 
     public static function albums(): void
     {
         $page  = max(1, self::integerValue($_GET['page'] ?? 1, 1));
         $limit = min(240, max(1, self::integerValue($_GET['limit'] ?? 240, 240)));
-        $offset = ($page - 1) * $limit;
-        $db = App::pdo();
         $where = '';
         $params = [];
         if (isset($_GET['artist_id'])) {
@@ -94,19 +77,9 @@ final class Api
         }
         if (isset($_GET['letter'])) {
             $where .= ($where ? ' AND ' : 'WHERE ') . 'UPPER(SUBSTR(a.name,1,1)) = ?';
-            $params[] = $_GET['letter'];
+            $params[] = self::stringValue($_GET['letter']);
         }
-        $st = $db->prepare("SELECT al.id, al.name, al.year, al.art_path,
-                             a.name AS artist_name, a.id AS artist_id,
-                             (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id=al.id) AS song_count
-                             FROM albums al JOIN artists a ON a.id = al.artist_id
-                             $where ORDER BY a.name, al.name
-                             LIMIT $limit OFFSET $offset");
-        $st->execute($params);
-        $totalSt = $db->prepare("SELECT COUNT(*)
-                                  FROM albums al JOIN artists a ON a.id=al.artist_id $where");
-        $totalSt->execute($params);
-        App::json(['albums' => $st->fetchAll(), 'total' => (int) $totalSt->fetchColumn(), 'page' => $page]);
+        App::json(Catalogue::albumPage($where, $params, $page, $limit));
     }
 
     public static function artist(string $id): void
@@ -118,11 +91,7 @@ final class Api
         if (!$artist) {
             App::err('Artist not found', 404);
         }
-        $st = $db->prepare('SELECT id, name, year, art_path,
-                             (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id=al.id) AS song_count
-                             FROM albums al WHERE artist_id = ? ORDER BY al.name');
-        $st->execute([$id]);
-        $artist['albums'] = $st->fetchAll();
+        $artist['albums'] = Catalogue::albumsOfArtist(self::integerValue($id));
         App::json($artist);
     }
 
@@ -387,34 +356,11 @@ final class Api
 
     public static function art(string $id): void
     {
-        $db = App::pdo();
         // Distinguer artiste et album : leurs identifiants n'appartiennent pas au même espace
         if (($_GET['type'] ?? '') === 'artist') {
-            $st = $db->prepare('SELECT art_path FROM artists WHERE id = ?');
-            $st->execute([$id]);
-            $path = $st->fetchColumn();
-            if (!is_string($path) || !file_exists($path)) {
-                $st = $db->prepare(
-                    'SELECT al.art_path
-                       FROM albums al
-                      WHERE al.artist_id = ? AND al.art_path IS NOT NULL
-                      ORDER BY (SELECT COUNT(*) FROM songs s WHERE s.album_id = al.id) DESC,
-                               al.year DESC, al.id
-                    '
-                );
-                $st->execute([$id]);
-                $path = null;
-                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $candidate) {
-                    if (is_string($candidate) && file_exists($candidate)) {
-                        $path = $candidate;
-                        break;
-                    }
-                }
-            }
+            $path = Catalogue::artistArt(self::integerValue($id));
         } else {
-            $st = $db->prepare('SELECT art_path FROM albums WHERE id = ?');
-            $st->execute([$id]);
-            $path = $st->fetchColumn();
+            $path = Catalogue::albumArt(self::integerValue($id));
         }
         if (!is_string($path) || !file_exists($path)) {
             http_response_code(404);
@@ -531,14 +477,9 @@ final class Api
 
         $genres = self::genreSummary();
 
-        $artists = $db->query('SELECT a.id, a.name, COUNT(s.id) AS song_count
-                               FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
-                               GROUP BY a.id ORDER BY RANDOM() LIMIT 8')->fetchAll();
+        $artists = Catalogue::artistsRandom(8);
 
-        $albums = $db->query('SELECT al.id, al.name, al.year, a.name AS artist_name, a.id AS artist_id,
-                                     (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id = al.id) AS song_count
-                              FROM albums al JOIN artists a ON a.id = al.artist_id
-                              ORDER BY RANDOM() LIMIT 8')->fetchAll();
+        $albums = Catalogue::albumsRandom(8);
 
         $recent = $db->query('SELECT s.id, s.title, s.last_played,
                                      a.name AS artist_name,
@@ -576,14 +517,7 @@ final class Api
         if ($name === '') {
             App::err('Genre name required');
         }
-        $db = App::pdo();
-        $st = $db->prepare('SELECT al.id, al.name, al.year, al.art_path,
-                            a.name AS artist_name, a.id AS artist_id,
-                            (SELECT COUNT(*) FROM songs s2 WHERE s2.album_id = al.id) AS song_count
-                            FROM albums al JOIN artists a ON a.id = al.artist_id
-                            WHERE al.genre = ? ORDER BY a.name, al.name');
-        $st->execute([$name]);
-        $albums = $st->fetchAll();
+        $albums = Catalogue::albumsFiltered('WHERE al.genre = ?', [$name]);
         $totalSongs = 0;
         foreach ($albums as $a) {
             if (is_array($a)) {

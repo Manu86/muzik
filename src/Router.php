@@ -50,9 +50,6 @@ final class Router
             if ($effectiveMethod !== $verb) {
                 continue;
             }
-            if ($pattern === 'api/artists' && isset($_GET['letter'])) {
-                $handler = 'artistsByLetter';
-            }
             if (preg_match('#^' . $pattern . '$#', $path, $m)) {
                 if (!in_array($handler, self::PUBLIC_HANDLERS, true)) {
                     Auth::requireAuth();
@@ -74,8 +71,6 @@ final class Router
             case 'search': Api::search();
                 break;
             case 'artists': Api::artists();
-                break;
-            case 'artistsByLetter': Api::artistsByLetter();
                 break;
             case 'albums': Api::albums();
                 break;

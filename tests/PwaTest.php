@@ -7,7 +7,7 @@ final class PwaTest extends TestCase
     public function testManifestReferencesExistingIconsWithTheDeclaredDimensions(): void
     {
         $public = dirname(__DIR__) . '/public';
-        $html = file_get_contents($public . '/index.html');
+        $html = file_get_contents($public . '/app.html');
         $manifestContents = file_get_contents($public . '/manifest.json');
         self::assertNotFalse($html);
         self::assertNotFalse($manifestContents);
@@ -38,10 +38,10 @@ final class PwaTest extends TestCase
     public function testNavigationViewsExistInTheHtmlAndJavascriptRouter(): void
     {
         $public = dirname(__DIR__) . '/public';
-        $html = file_get_contents($public . '/index.html');
-        $javascript = file_get_contents($public . '/assets/app.js');
+        $html = file_get_contents($public . '/app.html');
+        $javascript = $this->javascriptSources();
         self::assertNotFalse($html);
-        self::assertNotFalse($javascript);
+        self::assertStringContainsString('<script type="module" src="assets/js/app.js?v=77"></script>', $html);
 
         preg_match_all('/data-view="([a-z-]+)"/', $html, $matches);
         $views = array_values(array_unique(array_filter(
@@ -59,12 +59,58 @@ final class PwaTest extends TestCase
         }
     }
 
+    public function testSettingsViewLoaderIsWiredIntoTheRouter(): void
+    {
+        $public = dirname(__DIR__) . '/public/assets/js';
+        $app = file_get_contents($public . '/app.js');
+        $account = file_get_contents($public . '/account.js');
+        $views = file_get_contents($public . '/views.js');
+        self::assertNotFalse($app);
+        self::assertNotFalse($account);
+        self::assertNotFalse($views);
+
+        self::assertStringContainsString('export async function loadSettingsView()', $account);
+        self::assertStringContainsString('export function configureSettingsView(loader)', $views);
+        self::assertStringContainsString("if (name === 'settings') settingsViewLoader();", $views);
+        self::assertStringContainsString('configureSettingsView(loadSettingsView);', $app);
+    }
+
+    public function testSettingsBlocksHaveVerticalSpacing(): void
+    {
+        $stylesheet = file_get_contents(dirname(__DIR__) . '/public/assets/css/app.css');
+        self::assertNotFalse($stylesheet);
+
+        self::assertMatchesRegularExpression(
+            '/\.settings-section\s*\{[^}]*margin-bottom:\s*16px;/s',
+            $stylesheet,
+        );
+    }
+
+    public function testSearchCanBeClosedAndClearedWithAnAccessibleButton(): void
+    {
+        $public = dirname(__DIR__) . '/public';
+        $html = file_get_contents($public . '/app.html');
+        $javascript = file_get_contents($public . '/assets/js/views.js');
+        $stylesheet = file_get_contents($public . '/assets/css/app.css');
+        self::assertNotFalse($html);
+        self::assertNotFalse($javascript);
+        self::assertNotFalse($stylesheet);
+
+        self::assertStringContainsString(
+            '<button id="search-close" type="button" aria-label="Fermer la recherche"',
+            $html,
+        );
+        self::assertStringContainsString("searchClose.addEventListener('click'", $javascript);
+        self::assertStringContainsString("searchInput.value = '';", $javascript);
+        self::assertStringContainsString('searchClose.hidden = q.length === 0;', $javascript);
+        self::assertStringContainsString('#search-close[hidden] { display: none; }', $stylesheet);
+    }
+
     public function testSongListsShowThePlayingIndicatorOverTheArtworkWithoutNumbers(): void
     {
         $public = dirname(__DIR__) . '/public';
-        $javascript = file_get_contents($public . '/assets/app.js');
-        $stylesheet = file_get_contents($public . '/assets/app.css');
-        self::assertNotFalse($javascript);
+        $javascript = $this->javascriptSources();
+        $stylesheet = file_get_contents($public . '/assets/css/app.css');
         self::assertNotFalse($stylesheet);
 
         self::assertStringNotContainsString('<span class="num', $javascript);
@@ -82,8 +128,7 @@ final class PwaTest extends TestCase
 
     public function testAlbumDetailShowsTheYearBetweenTrackCountAndPath(): void
     {
-        $javascript = file_get_contents(dirname(__DIR__) . '/public/assets/app.js');
-        self::assertNotFalse($javascript);
+        $javascript = $this->javascriptSources();
 
         self::assertMatchesRegularExpression(
             "/data\\.songs\\.length.*data\\.year \\? ' · ' \\+ data\\.year.*data\\.path \\? ' · ' \\+ esc\\(data\\.path\\)/",
@@ -93,8 +138,7 @@ final class PwaTest extends TestCase
 
     public function testDetailBackButtonsAreBoundWithinTheirOwnView(): void
     {
-        $javascript = file_get_contents(dirname(__DIR__) . '/public/assets/app.js');
-        self::assertNotFalse($javascript);
+        $javascript = $this->javascriptSources();
 
         self::assertStringNotContainsString('id="back-link"', $javascript);
         self::assertStringContainsString("const link = $('.back', view)", $javascript);
@@ -106,9 +150,8 @@ final class PwaTest extends TestCase
     public function testOpenQueueAddsItsMeasuredHeightToTheContentInset(): void
     {
         $public = dirname(__DIR__) . '/public';
-        $javascript = file_get_contents($public . '/assets/app.js');
-        $stylesheet = file_get_contents($public . '/assets/app.css');
-        self::assertNotFalse($javascript);
+        $javascript = $this->javascriptSources();
+        $stylesheet = file_get_contents($public . '/assets/css/app.css');
         self::assertNotFalse($stylesheet);
 
         self::assertStringContainsString('const height = queueOpen ? panel.offsetHeight : 0', $javascript);
@@ -120,7 +163,7 @@ final class PwaTest extends TestCase
 
     public function testScrollbarsMatchTheDarkTheme(): void
     {
-        $stylesheet = file_get_contents(dirname(__DIR__) . '/public/assets/app.css');
+        $stylesheet = file_get_contents(dirname(__DIR__) . '/public/assets/css/app.css');
         self::assertNotFalse($stylesheet);
 
         self::assertStringContainsString('scrollbar-color: #454545 var(--bg-2)', $stylesheet);
@@ -153,8 +196,7 @@ final class PwaTest extends TestCase
 
     public function testBackgroundPlaybackUsesABoundedRollingBufferAndKeepsMediaSessionActive(): void
     {
-        $javascript = file_get_contents(dirname(__DIR__) . '/public/assets/app.js');
-        self::assertNotFalse($javascript);
+        $javascript = $this->javascriptSources();
 
         self::assertStringContainsString("audio.preload = 'auto'", $javascript);
         self::assertStringContainsString('const PREFETCH_PARALLEL = 2', $javascript);
@@ -163,5 +205,21 @@ final class PwaTest extends TestCase
         self::assertStringContainsString('releaseActiveBlob()', $javascript);
         self::assertStringContainsString("ms.playbackState = wantPlay ? 'playing' : 'paused'", $javascript);
         self::assertStringNotContainsString("fetch('api/ping')", $javascript);
+    }
+
+    private function javascriptSources(): string
+    {
+        $files = glob(dirname(__DIR__) . '/public/assets/js/*.js');
+        self::assertIsArray($files);
+        sort($files);
+
+        $sources = [];
+        foreach ($files as $file) {
+            $source = file_get_contents($file);
+            self::assertNotFalse($source);
+            $sources[] = $source;
+        }
+
+        return implode("\n", $sources);
     }
 }

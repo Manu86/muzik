@@ -309,7 +309,12 @@ et PHP 8.4.
 
 ```text
 public/index.php        point d’entrée HTTP et fichiers statiques
-public/assets/app.js    interface et lecteur audio
+public/assets/js/app.js point d’entrée de l’interface JavaScript
+public/assets/js/core.js état partagé, API et utilitaires du navigateur
+public/assets/js/favorites.js état et actions des favoris
+public/assets/js/views.js navigation et vues du catalogue
+public/assets/js/player.js lecteur audio, file d’attente et préchargement
+public/assets/js/account.js authentification et réglages
 public/install.php      page d’installation au premier lancement
 config.php              charge la configuration publique puis locale
 config/app.php          valeurs portables versionnées
