@@ -453,17 +453,6 @@ button.back { background: none; border: none; padding: 0; font: inherit; }
   .album-hero-info { width: 100%; }
 }
 
-.pager {
-  display: flex; align-items: center; gap: 8px; margin: 22px 0 10px; flex-wrap: wrap;
-}
-.pager a {
-  color: var(--text); background: var(--bg-2); border: 1px solid var(--border);
-  padding: 7px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none;
-}
-.pager a:hover { border-color: var(--accent); }
-.pager a.cur { background: var(--accent); color: #082015; border-color: var(--accent); font-weight: 600; }
-.pager .count { color: var(--muted); font-size: 13px; }
-
 .end-note { color: var(--muted); font-size: 13px; text-align: center; padding: 14px 0 30px; }
 
 /* Réglages */

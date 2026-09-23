@@ -19,7 +19,6 @@ const state = {
   shuffle: false,
   repeat: false,
   transcode: 0,
-  albumPage: 1,
   currentAlbum: null,
   currentArtistName: null,
 };
@@ -71,7 +70,6 @@ function esc(s) {
 
 /* Pictos de pages (même dessin que le menu, couleur du texte) */
 const PICTOS = {
-  home: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
   artists: 'M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z',
   albums: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5A6.5 6.5 0 1 1 12 3.5a6.5 6.5 0 0 1 0 13zm0-5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
   genres: 'M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z',
@@ -90,11 +88,6 @@ function fmtDur(sec) {
   if (sec == null || isNaN(sec)) return '–';
   sec = Math.round(sec);
   return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-}
-
-function fmtSize(bytes) {
-  if (bytes == null) return '';
-  return (bytes / 1024 / 1024 / 1024).toFixed(1) + ' Go';
 }
 
 function qs(val) {
@@ -250,6 +243,9 @@ async function loadArtists() {
   el.dataset.loaded = '1';
   const data = await api.get('api/artists');
   const letters = data.letters.map(l => l.l).join('');
+  if (!letters.includes(state.letter) && letters) {
+    state.letter = letters[0];
+  }
   el.innerHTML =
     '<div class="view-header">' + pictoIcon('artists') + '<h2>Artistes</h2><span class="count">' + (data.total || 0) + ' artistes</span></div>' +
     '<div class="letters">' +
@@ -519,7 +515,6 @@ async function openGenre(name, backView) {
   const target = '#/genre/' + qs(name);
   navigateTo(target);
   switchView('genre-detail');
-  $('#view-genre-detail').dataset.back = backView;
   $('#view-genre-detail').innerHTML = '<div class="empty">Chargement…</div>';
   const data = await api.get('api/genre?name=' + qs(name));
   $('#view-genre-detail').innerHTML = `
@@ -578,7 +573,6 @@ async function renderAlbumDetail(id, backView) {
   state.currentAlbum = data;
   state.currentArtistName = data.artist_name;
   switchView('album-detail');
-  $('#view-album-detail').dataset.back = backView;
   const target = '#/album/' + id;
   navigateTo(target);
   const favIds = await getFavIds();
@@ -693,10 +687,6 @@ async function deleteAlbum(id) {
     alert('Échec de la suppression : ' + (await r.text()));
     return;
   }
-  try {
-    const res = await r.json();
-    state.lastDeleted = res;
-  } catch (e) {}
   const orig = state.queue;
   const oldIdx = state.index;
   const playing = String(state.playingId);
@@ -739,7 +729,6 @@ async function openArtist(id, backView) {
   if (token !== albumToken) return;
   state.currentArtistName = data.name;
   switchView('artist-detail');
-  $('#view-artist-detail').dataset.back = backView;
   const target = '#/artist/' + id;
   navigateTo(target);
   $('#view-artist-detail').innerHTML = `
@@ -786,7 +775,7 @@ function renderTrack(t, favIds) {
   return `
     <div class="track-row" data-id="${t.id}" data-title="${esc(t.title)}" data-artist="${esc(t.artist)}" data-duration="${t.duration || ''}">
       ${thumbHtml(t.album)}
-      <span class="ti">${esc(t.title)}<span class="t-artist" data-art>${esc(t.artist)}</span></span>
+      <span class="ti">${esc(t.title)}<span class="t-artist">${esc(t.artist)}</span></span>
       <span class="du">${fmtDur(t.duration)}</span>
       <span></span>
       <button class="fav${on}" data-fav type="button" aria-label="${on ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${on}">${on ? '♥' : '♡'}</button>
@@ -1474,8 +1463,8 @@ function audioUrl(id) {
   return `api/stream/${id}?transcode=${state.transcode}`;
 }
 
-function streamUrl(id, bitrate, start = 0) {
-  return `api/stream/${id}?transcode=${bitrate}` + (start > 0 ? '&start=' + start.toFixed(1) : '');
+function streamUrl(id, bitrate) {
+  return `api/stream/${id}?transcode=${bitrate}`;
 }
 
 const BG_TRANSCODE = 192;

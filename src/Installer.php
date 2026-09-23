@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 /**
  * Logique de la page d'installation : contrôles de prérequis, détection de
- * FFmpeg, écriture de config.local.php (identifiants inclus) et marqueur
- * « installée » dans SQLite.
+ * FFmpeg et écriture de config.local.php (identifiants inclus).
  */
 final class Installer
 {
@@ -156,14 +155,6 @@ final class Installer
     public static function hashPassword(string $password): string
     {
         return password_hash($password, PASSWORD_BCRYPT);
-    }
-
-    /**
-     * Marque l'installation comme terminée dans SQLite.
-     */
-    public static function markInstalled(): void
-    {
-        DB::setSetting('installed', '1');
     }
 
     /**
