@@ -180,9 +180,10 @@ Depuis l’interface, la vue « Réglages » (voir le compte connecté) permet d
 modifier l’emplacement des fichiers musicaux du compte connecté : `PUT
 /api/config` met à jour l’utilisateur dans `data/users.db`, recharge la
 configuration et lance une indexation de cet utilisateur. Le même écran
-relance un rescannage incrémental en arrière-plan ; son état (en cours ou
-dernière exécution) est affiché en temps réel et visible via l’API
-`POST /api/scan`.
+relance un rescannage complet en arrière-plan (équivalent d’un
+`bin/scan.php --full` : les pistes dont le fichier a disparu du disque sont
+retirées de la base) ; son état (en cours ou dernière exécution) est affiché
+en temps réel et visible via l’API `POST /api/scan`.
 
 Titre, artiste, album, année et genre sont lus dans les tags ID3 des fichiers
 MP3 (id3v2, repli id3v1). Le genre est normalisé dans une liste canonique
@@ -204,6 +205,11 @@ php bin/fetch-art.php --limit 10
 ```
 
 Les sources sont interrogées dans l’ordre suivant : Deezer, MusicBrainz avec Cover Art Archive, puis iTunes. Les images sont enregistrées près des fichiers musicaux sous le nom `cover.jpg` ou `cover.png`.
+
+Sans image dans le dossier, le scanner **extrait la pochette embarquée** (APIC
+ID3v2, `covr` MP4…) du premier morceau et l’enregistre dans `data/art/`. Le
+nom de fichier découle du dossier : un même album produit toujours le même
+chemin, l’extraction est donc idempotente.
 
 Dans la vue des artistes, une jaquette de l'album comportant le plus de pistes
 est utilisée automatiquement lorsqu'aucune photo d'artiste n'est disponible.
@@ -317,11 +323,11 @@ src/Streamer.php        streaming direct et transcodage
 src/DB.php              connexion, schéma et migrations SQLite
 src/Scanner.php         indexation de la bibliothèque
 bin/                    commandes d’administration (dont bin/users.php)
-data/                   bases (users.db, muzik.db, <login>.db), caches, journaux
+data/                   bases (users.db, muzik.db, <login>.db), pochettes extraites (art/), caches, journaux
 tests/                  tests PHPUnit
 ```
 
-Le schéma SQLite contient cinq tables principales : `artists`, `albums`, `songs`, `favorites` et `settings`. Les suppressions d’artistes et d’albums sont propagées par clés étrangères.
+Le schéma SQLite contient six tables principales : `artists`, `albums`, `songs`, `favorites`, `settings` et `genres`. Les suppressions d’artistes et d’albums sont propagées par clés étrangères. Les jaquettes d’albums et d’artistes sont référencées par `art_path` (fichier image ou pochette extraite de `data/art/`).
 
 ## API
 

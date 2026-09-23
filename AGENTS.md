@@ -96,6 +96,19 @@ Le dépôt peut être monté via SMB. Ce système de fichiers ne prend pas toujo
 - placer leurs caches sous `/tmp` ou les désactiver ;
 - ne pas interpréter les avertissements `Operation not supported` de Composer comme des erreurs si l’installation se termine correctement.
 
+Les bases de chaque catalogue (`data/<login>.db`) sont partagées entre le
+serveur web (`www-data`) et l’admin en CLI :
+
+- le journal SQLite reste en mode `DELETE` (jamais `WAL`) : les fichiers
+  `-wal`/`-shm` d’un utilisateur bloquent l’autre en écriture sur SMB ;
+- conserver l’ACL `www-data:rw` sur les fichiers d’un catalogue géré par le web
+  (ex. `data/marie.db`) ; `setfacl` est refusé hors propriétaire ;
+- les pochettes extraites des tags (« AFRO », APIC/covr) sont écrites dans
+  `data/art/`, à côté de la base du compte.
+
+Depuis l’interface, le bouton « Analyser » des Réglages déclenche un scan
+complet (`POST /api/scan`, équivalent de `bin/scan.php --full`).
+
 ## Définition de terminé
 
 Une modification est terminée lorsque :
