@@ -243,32 +243,51 @@ async function loadArtists() {
   el.dataset.loaded = '1';
   const data = await api.get('api/artists');
   const letters = data.letters.map(l => l.l).join('');
-  if (!letters.includes(state.letter) && letters) {
+  const showFilter = data.total >= 20;
+  if (showFilter && !letters.includes(state.letter) && letters) {
     state.letter = letters[0];
   }
   el.innerHTML =
     '<div class="view-header">' + pictoIcon('artists') + '<h2>Artistes</h2><span class="count">' + (data.total || 0) + ' artistes</span></div>' +
-    '<div class="letters">' +
-    [...letters].map(l =>
-      `<button type="button" data-l="${esc(l)}" class="${l === state.letter ? 'active' : ''}">${esc(l)}</button>`
-    ).join('') +
-    '</div><div class="grid" id="artist-grid"></div>';
-  $$('#view-artists .letters button').forEach(b =>
-    b.addEventListener('click', () => {
-      state.letter = b.dataset.l;
-      $$('#view-artists .letters button').forEach(x => x.classList.toggle('active', x === b));
-      loadArtistLetter(state.letter);
-    })
-  );
-  loadArtistLetter(state.letter);
+    (showFilter
+      ? '<div class="letters">' +
+        [...letters].map(l =>
+          `<button type="button" data-l="${esc(l)}" class="${l === state.letter ? 'active' : ''}">${esc(l)}</button>`
+        ).join('') +
+        '</div>'
+      : '') +
+    '<div class="grid" id="artist-grid"></div>';
+  if (showFilter) {
+    $$('#view-artists .letters button').forEach(b =>
+      b.addEventListener('click', () => {
+        state.letter = b.dataset.l;
+        $$('#view-artists .letters button').forEach(x => x.classList.toggle('active', x === b));
+        loadArtistLetter(state.letter);
+      })
+    );
+    loadArtistLetter(state.letter);
+  } else {
+    loadAllArtists();
+  }
 }
 
 async function loadArtistLetter(letter) {
   const grid = $('#artist-grid');
   grid.innerHTML = '<div class="empty">Chargement…</div>';
   const list = await api.get('api/artists?letter=' + qs(letter));
+  renderArtistGrid(grid, list);
+}
+
+async function loadAllArtists() {
+  const grid = $('#artist-grid');
+  grid.innerHTML = '<div class="empty">Chargement…</div>';
+  const list = await api.get('api/artists?letter=');
+  renderArtistGrid(grid, list);
+}
+
+function renderArtistGrid(grid, list) {
   if (!list.length) {
-    grid.innerHTML = '<div class="empty">Aucun artiste pour cette lettre.</div>';
+    grid.innerHTML = '<div class="empty">Aucun artiste.</div>';
     return;
   }
   grid.innerHTML = list.map(a => `

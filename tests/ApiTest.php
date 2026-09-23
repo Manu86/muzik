@@ -47,6 +47,11 @@ final class ApiTest extends TestCase
         self::assertIsNumeric($letterRow['song_count']);
         self::assertSame(2, (int) $letterRow['song_count']);
 
+        $_GET = [];
+        $all = $this->captureJson(static fn() => Api::artistsByLetter());
+        self::assertCount(2, $all->data);
+        self::assertSame(['Alpha', 'Beta'], array_column($all->data, 'name'));
+
         $_GET = ['artist_id' => (string) $this->alphaArtist, 'letter' => 'A'];
         $albums = $this->captureJson(static fn() => Api::albums());
         self::assertSame(1, $albums->data['total']);

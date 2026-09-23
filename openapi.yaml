@@ -137,10 +137,9 @@ paths:
       parameters:
         - name: letter
           in: query
-          description: Si présent, renvoie les artistes commençant par cette lettre.
+          description: Lettre optionnelle. Absente ou vide : renvoie tous les artistes. Sinon : les artistes commençant par cette lettre.
           schema:
             type: string
-            minLength: 1
             maxLength: 1
       responses:
         '200':

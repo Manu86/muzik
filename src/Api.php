@@ -64,13 +64,19 @@ final class Api
 
     public static function artistsByLetter(): void
     {
-        $letter = $_GET['letter'] ?? 'A';
+        $letter = $_GET['letter'] ?? '';
         $db = App::pdo();
-        $st = $db->prepare('SELECT a.id, a.name, a.art_path, COUNT(s.id) AS song_count
-                             FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
-                             WHERE UPPER(SUBSTR(a.name,1,1)) = ?
-                             GROUP BY a.id ORDER BY a.name');
-        $st->execute([$letter]);
+        if ($letter !== '') {
+            $st = $db->prepare('SELECT a.id, a.name, a.art_path, COUNT(s.id) AS song_count
+                                 FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
+                                 WHERE UPPER(SUBSTR(a.name,1,1)) = ?
+                                 GROUP BY a.id ORDER BY a.name');
+            $st->execute([$letter]);
+        } else {
+            $st = $db->query('SELECT a.id, a.name, a.art_path, COUNT(s.id) AS song_count
+                               FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
+                               GROUP BY a.id ORDER BY a.name');
+        }
         App::json($st->fetchAll());
     }
 
