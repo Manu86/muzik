@@ -172,6 +172,42 @@ final class ScannerTest extends TestCase
         self::assertSame('Jazz', (string) $pdo->query("SELECT genre FROM albums WHERE id = $album2")->fetchColumn());
     }
 
+    public function testEmbeddedArtworkIsExtractedWhenNoCoverFileExists(): void
+    {
+        $root = $this->temporaryDirectory . '/music';
+        $artistDirectory = $root . '/VDA';
+        mkdir($artistDirectory, 0777, true);
+        $picture = "\xFF\xD8\xFF\xE0" . str_repeat("\x10", 64);
+        file_put_contents($artistDirectory . '/01 - Premier.mp3', $this->id3WithPicture($picture));
+        file_put_contents($artistDirectory . '/02 - Deuxième.mp3', 'audio');
+        $this->initialiseApp($root);
+
+        ob_start();
+        $this->scanner->run();
+        ob_end_clean();
+
+        $artPath = App::pdo()->query('SELECT art_path FROM albums')->fetchColumn();
+        self::assertIsString($artPath);
+        self::assertFileExists($artPath);
+        self::assertSame($picture, file_get_contents($artPath));
+        self::assertSame(dirname(App::dbPath()) . '/art', dirname($artPath));
+    }
+
+    private function id3WithPicture(string $picture): string
+    {
+        $framePayload = "\x00" . 'image/jpeg' . "\x00" . "\x03" . "\x00" . $picture;
+        $frame = 'APIC' . pack('N', strlen($framePayload)) . "\x00\x00" . $framePayload;
+        $frameHeader = str_repeat("\xFF\xFB\x90\x00", 1) . str_repeat("\x00", 413);
+        return 'ID3' . "\x03\x00\x00" . $this->synchsafe(strlen($frame)) . $frame
+            . $frameHeader . $frameHeader . $frameHeader;
+    }
+
+    private function synchsafe(int $n): string
+    {
+        return chr(($n >> 21) & 0x7F) . chr(($n >> 14) & 0x7F)
+            . chr(($n >> 7) & 0x7F) . chr($n & 0x7F);
+    }
+
     private function invoke(string $method, mixed ...$arguments): mixed
     {
         $reflection = new ReflectionMethod($this->scanner, $method);

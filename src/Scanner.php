@@ -35,7 +35,7 @@ final class Scanner
      * Retourne false si aucun processus n'a pu être détaché — l'appelant doit
      * alors scanner de façon synchrone.
      */
-    public static function startBackgroundScan(string $projectRoot, ?string $login = null): bool
+    public static function startBackgroundScan(string $projectRoot, ?string $login = null, bool $full = false): bool
     {
         if (!function_exists('proc_open')) {
             return false;
@@ -58,6 +58,9 @@ final class Scanner
         if ($login !== null && $login !== '') {
             $command[] = '--user';
             $command[] = $login;
+        }
+        if ($full) {
+            $command[] = '--full';
         }
 
         $process = @proc_open(
@@ -170,7 +173,7 @@ final class Scanner
             }
         }
         $albumName = count($files) >= 2 ? $artistName : 'Sans album';
-        $albumArt = $this->findArt($artistPath);
+        $albumArt = $this->findArt($artistPath) ?: $this->extractEmbeddedArt($artistPath);
         $artistId = null;
         $albumId = null;
         $albumYear = null;
@@ -221,7 +224,8 @@ final class Scanner
         }
 
         $artistId = $this->ensureArtist($artistName, $albumBase, $container);
-        $art = $this->findArt($albumBase) ?: $this->findArt(dirname($albumBase)) ?: $this->findArt($container);
+        $art = $this->findArt($albumBase) ?: $this->findArt(dirname($albumBase)) ?: $this->findArt($container)
+            ?: $this->extractEmbeddedArt($albumBase);
         $albumId = $this->ensureAlbum($artistId, $albumName, $info['year'] ?? null, $albumBase, $art, $info['genre'] ?? '');
         $this->upsertSong($info, $artistId, $albumId, $seen);
     }
@@ -418,14 +422,14 @@ final class Scanner
         $st->execute([$name]);
         $id = $st->fetchColumn();
         if ($id !== false) {
-            $art = $this->findArt($artSearch);
+            $art = $this->findArt($artSearch) ?: $this->extractEmbeddedArt($artSearch);
             if ($art) {
                 App::pdo()->prepare('UPDATE artists SET art_path = COALESCE(art_path, ?) WHERE id = ?')
                     ->execute([$art, $id]);
             }
             return (int) $id;
         }
-        $art = $this->findArt($artSearch);
+        $art = $this->findArt($artSearch) ?: $this->extractEmbeddedArt($artSearch);
         $ins = App::pdo()->prepare('INSERT INTO artists(name, path, art_path) VALUES(?,?,?)');
         $ins->execute([$name, $path, $art]);
         return (int) App::pdo()->lastInsertId();
@@ -545,6 +549,62 @@ final class Scanner
             if (is_file($full)) {
                 return $full;
             }
+        }
+        return null;
+    }
+
+    /**
+     * Extrait la pochette embarquée (ID3v2 APIC, MP4 covr…) du premier
+     * fichier audio du dossier et l'enregistre dans data/art/.
+     *
+     * Le fichier est déduit du répertoire : un même album produit toujours
+     * le même chemin, ce qui rend l'opération idempotente. Retourne null si
+     * aucun fichier audio du dossier ne porte d'image.
+     */
+    private function extractEmbeddedArt(string $dir): ?string
+    {
+        if (!is_dir($dir)) {
+            return null;
+        }
+        $artDir = dirname(App::dbPath()) . '/art';
+        foreach (new DirectoryIterator($dir) as $entry) {
+            if ($entry->isDot() || !$entry->isFile() || !$this->isAudio($entry->getFilename())) {
+                continue;
+            }
+            try {
+                $id3 = $this->getId3->analyze($entry->getPathname());
+            } catch (Throwable $e) {
+                $this->resetGetId3();
+                continue;
+            }
+            $comments = is_array($id3) ? ($id3['comments'] ?? null) : null;
+            $pictures = is_array($comments) ? ($comments['picture'] ?? null) : null;
+            if (!is_array($pictures) || $pictures === []) {
+                $this->resetGetId3();
+                continue;
+            }
+            $picture = $pictures[0];
+            $data = is_array($picture) ? ($picture['data'] ?? null) : null;
+            if (!is_string($data) || $data === '') {
+                $this->resetGetId3();
+                continue;
+            }
+            $mime = '';
+            if (is_array($picture) && isset($picture['image_mime']) && is_string($picture['image_mime'])) {
+                $mime = strtolower($picture['image_mime']);
+            }
+            $ext = match ($mime) {
+                'image/png' => 'png',
+                'image/gif' => 'gif',
+                default => 'jpg',
+            };
+            @mkdir($artDir, 0775, true);
+            $out = $artDir . '/' . sha1($dir) . '.' . $ext;
+            if (!is_file($out)) {
+                file_put_contents($out, $data);
+            }
+            $this->resetGetId3();
+            return $out;
         }
         return null;
     }

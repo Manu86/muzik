@@ -809,11 +809,13 @@ paths:
   /api/scan:
     post:
       tags: [Bibliothèque]
-      summary: Relance l'indexation de la bibliothèque en arrière-plan
+      summary: Relance l'indexation complète de la bibliothèque en arrière-plan
       description: |
-        Détache `bin/scan.php` et retourne immédiatement. Si une analyse est
-        déjà en cours, renvoie `{ "ok": false, "running": true }` sans lancer
-        de nouveau processus. L'avancement est observable via
+        Détache `bin/scan.php --full` et retourne immédiatement. En mode
+        complet (prune), les pistes disparues du disque sont supprimées de la
+        base. Si une analyse est déjà en cours, renvoie
+        `{ "ok": false, "running": true }` sans lancer de nouveau processus.
+        L'avancement est observable via
         `GET /api/settings` (`scan_running`, `scan_started_at`, `scan_last_run`).
       operationId: startScan
       responses:

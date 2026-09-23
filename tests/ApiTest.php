@@ -416,6 +416,28 @@ final class ApiTest extends TestCase
         self::assertFileExists($this->temporaryDirectory . '/data/scan-install.log');
     }
 
+    public function testScanSpawnsFullBackgroundProcess(): void
+    {
+        if (!function_exists('proc_open')) {
+            $this->markTestSkipped('proc_open est désactivé.');
+        }
+
+        mkdir($this->temporaryDirectory . '/bin', 0777, true);
+        mkdir($this->temporaryDirectory . '/data', 0777, true);
+        file_put_contents(
+            $this->temporaryDirectory . '/bin/scan.php',
+            "<?php\nfile_put_contents(__DIR__ . '/../data/scan-argv.json', json_encode(\$_SERVER['argv']));\n"
+        );
+
+        $response = $this->captureJson(fn() => Api::scan($this->temporaryDirectory));
+        self::assertSame(['ok' => true], $response->data);
+
+        usleep(300000);
+        $argv = json_decode((string) file_get_contents($this->temporaryDirectory . '/data/scan-argv.json'), true);
+        self::assertIsArray($argv);
+        self::assertContains('--full', $argv);
+    }
+
     public function testStreamUsesTheIndexedFileAndReportsMissingFiles(): void
     {
         $_GET = ['transcode' => '0'];

@@ -86,8 +86,13 @@ final class DB
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_STATEMENT_CLASS => [DatabaseStatement::class],
             ]);
-            self::$pdo->exec('PRAGMA journal_mode = WAL;');
+            // Journal en mode DELETE (pas de WAL) : la base est partagée entre
+            // plusieurs utilisateurs du système (le serveur web www-data et
+            // l'admin en CLI). Le WAL laisse des fichiers -wal/-shm au premier
+            // ouvrant qui bloquent l'autre en écriture sur un partage SMB.
+            self::$pdo->exec('PRAGMA journal_mode = DELETE;');
             self::$pdo->exec('PRAGMA synchronous = NORMAL;');
+            self::$pdo->exec('PRAGMA busy_timeout = 10000;');
             self::$pdo->exec('PRAGMA foreign_keys = ON;');
         }
         return self::$pdo;

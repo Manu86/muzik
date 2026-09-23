@@ -78,6 +78,11 @@ final class App
         return rtrim(self::$config['music_root'], '/');
     }
 
+    public static function dbPath(): string
+    {
+        return self::$config['db_path'];
+    }
+
     public static function ffmpeg(): string
     {
         return self::$config['ffmpeg'];
@@ -103,6 +108,10 @@ final class App
         if ($genre === null || trim($genre) === '') {
             return null;
         }
+
+        // L'espace insécable (U+00A0) fréquente dans les tags est considérée
+        // comme un espace ordinaire, sinon elle crée des libellés dupliqués.
+        $genre = str_replace("\u{00A0}", ' ', $genre);
 
         $key = strtolower(trim((string) preg_replace('/\s+/', ' ', $genre)));
         if (in_array($key, ['unknown', 'none', 'inconnu', 'no genre', 'various', 'varia'], true)) {
@@ -133,6 +142,7 @@ final class App
             'classique' => 'Classique',
             'classical' => 'Classique',
             'pop' => 'Pop',
+            'afro pop' => 'Afro pop',
             'electro' => 'Electro',
             'techno' => 'Electro',
             'house' => 'Electro',

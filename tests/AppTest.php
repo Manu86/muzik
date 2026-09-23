@@ -30,6 +30,8 @@ final class AppTest extends TestCase
         self::assertSame('Electro', App::normalizeGenre('Deep House'));
         self::assertSame('Easy Listening', App::normalizeGenre(' easy listening '));
         self::assertSame('Easy Listening', App::normalizeGenre('1 easy listening'));
+        self::assertSame('Afro pop', App::normalizeGenre('Afro pop'));
+        self::assertSame('Afro pop', App::normalizeGenre("Afro\u{00A0}pop"));
         self::assertNull(App::normalizeGenre('unknown'));
         self::assertNull(App::normalizeGenre(''));
         self::assertNull(App::normalizeGenre('   '));
