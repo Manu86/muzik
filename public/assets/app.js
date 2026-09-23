@@ -306,7 +306,7 @@ function renderArtistGrid(grid, list) {
 /*  Albums                                                             */
 /* ------------------------------------------------------------------ */
 
-const ALBUM_PER = 240;
+const ALBUM_PER = 120;
 const albumsInf = { page: 0, totalPages: 1, loading: false, done: false };
 
 async function loadAlbums(reset = true) {
@@ -329,7 +329,7 @@ async function loadAlbums(reset = true) {
   albumsInf.loading = true;
   const end = $('#album-end');
   end.textContent = 'Chargement…';
-  const data = await api.get('api/albums?page=' + (albumsInf.page + 1));
+  const data = await api.get('api/albums?page=' + (albumsInf.page + 1) + '&limit=' + ALBUM_PER);
   const gridNow = $('#album-grid');
   const countEl = $('#album-count');
   if (albumsInf.page === 0) {

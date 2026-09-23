@@ -83,7 +83,7 @@ final class Api
     public static function albums(): void
     {
         $page  = max(1, self::integerValue($_GET['page'] ?? 1, 1));
-        $limit = 240;
+        $limit = min(240, max(1, self::integerValue($_GET['limit'] ?? 240, 240)));
         $offset = ($page - 1) * $limit;
         $db = App::pdo();
         $where = '';

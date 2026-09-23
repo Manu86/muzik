@@ -62,6 +62,27 @@ final class ApiTest extends TestCase
         self::assertSame('First Album', $albumRow['name']);
     }
 
+    public function testAlbumsRespectTheLimitParameter(): void
+    {
+        $_GET = ['limit' => '1'];
+        $page = $this->captureJson(static fn() => Api::albums());
+        self::assertSame(2, $page->data['total']);
+        $albumRows = $page->data['albums'];
+        self::assertIsArray($albumRows);
+        self::assertCount(1, $albumRows);
+        $albumRow = $albumRows[0];
+        self::assertIsArray($albumRow);
+        self::assertSame('First Album', $albumRow['name']);
+        self::assertSame(1, $page->data['page']);
+
+        $_GET = ['limit' => '500'];
+        $all = $this->captureJson(static fn() => Api::albums());
+        self::assertSame(2, $all->data['total']);
+        $allRows = $all->data['albums'];
+        self::assertIsArray($allRows);
+        self::assertCount(2, $allRows);
+    }
+
     public function testArtistAlbumAndSongDetailsAndMissingResources(): void
     {
         $artistId = (string) $this->alphaArtist;

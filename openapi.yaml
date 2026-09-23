@@ -166,6 +166,14 @@ paths:
       operationId: getAlbums
       parameters:
         - $ref: '#/components/parameters/Page'
+        - name: limit
+          in: query
+          description: Nombre d'albums par page, au maximum 240 (défaut 240).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 240
+            default: 240
         - name: artist_id
           in: query
           schema:
