@@ -34,6 +34,7 @@ if (PHP_SAPI === 'cli-server' && $routePath !== '/' && $routePath !== '/index.ph
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../src/DB.php';
 require __DIR__ . '/../src/App.php';
+require __DIR__ . '/../src/Users.php';
 require __DIR__ . '/../src/Installer.php';
 require __DIR__ . '/../src/Auth.php';
 require __DIR__ . '/../src/Router.php';
@@ -41,9 +42,16 @@ require __DIR__ . '/../src/Api.php';
 require __DIR__ . '/../src/Scanner.php';
 require __DIR__ . '/../src/Streamer.php';
 
-App::initConfig(require __DIR__ . '/../config.php');
+$baseConfig = require __DIR__ . '/../config.php';
+if (!is_array($baseConfig)) {
+    throw new RuntimeException('config.php doit retourner un tableau.');
+}
+/** @var array<string, mixed> $baseConfig */
+$projectRoot = __DIR__ . '/..';
 
-if (!Installer::installed()) {
+Users::ensureSchema($projectRoot);
+
+if (!Installer::installed($projectRoot)) {
     $isStaticAsset = false;
     if ($routePath !== '/') {
         $candidate = realpath(__DIR__ . '/' . ltrim($routePath, '/'));
@@ -105,6 +113,18 @@ if ($routePath !== '/index.php') {
         readfile($candidate);
         return;
     }
+}
+
+// Les routes publiques (login, logout, auth) tournent sans catalogue : leur
+// connexion est inutile. Pour tout le reste, on ouvre la base et la racine
+// musicale de l'utilisateur connecté.
+$publicApi = in_array($routePath, ['/api/login', '/api/logout', '/api/auth'], true);
+if (!$publicApi) {
+    $login = Auth::currentLogin();
+    if ($login === null || Users::profile($login) === null) {
+        App::err('Unauthorized', 401);
+    }
+    App::initConfig(Users::resolveConfig($login, $baseConfig));
 }
 
 $methodValue = $_SERVER['REQUEST_METHOD'] ?? 'GET';

@@ -10,7 +10,7 @@ année (au moins 2 fichiers, ratio >= 50 %). Les albums composites
 résolution en ligne.
 
 Usage :
-  python3 bin/year-from-files.py [--apply] [--samples N]
+  python3 bin/year-from-files.py [--apply] [--samples N] [--user LOGIN]
 """
 import argparse
 import json
@@ -27,8 +27,10 @@ from mutagen.id3 import ID3
 from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'lib'))
+from muzik_db import catalog_db  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
-DB = ROOT / 'data' / 'muzik.db'
 CACHE = ROOT / 'data' / 'years.json'
 
 
@@ -67,9 +69,11 @@ def main() -> None:
                         help='écrit albums.year et data/years.json')
     parser.add_argument('--samples', type=int, default=10,
                         help='écarts affichés')
+    parser.add_argument('--user', metavar='LOGIN',
+                        help='compte ciblé (défaut : data/muzik.db ou premier utilisateur)')
     args = parser.parse_args()
 
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(catalog_db())
     conn.row_factory = sqlite3.Row
     albums = conn.execute(
         "SELECT id, name, artist_id, year FROM albums "

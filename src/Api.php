@@ -32,7 +32,7 @@ final class Api
         if ($user === '' || $pass === '' || !Auth::attempt($user, $pass, $remember)) {
             App::err('Unauthorized', 401);
         }
-        App::json(['ok' => true, 'user' => App::config('auth_user')]);
+        App::json(['ok' => true, 'user' => Auth::currentLogin()]);
     }
 
     public static function logout(): void
@@ -45,7 +45,7 @@ final class Api
     {
         App::json([
             'authenticated' => Auth::check(),
-            'user' => Auth::check() && Auth::enabled() ? App::config('auth_user') : null,
+            'user' => Auth::currentLogin(),
         ]);
     }
 
@@ -486,22 +486,44 @@ final class Api
 
     public static function genres(): void
     {
+        App::json(self::genreSummary());
+    }
+
+    /** @return list<array{genre: string, album_count: int, song_count: int}> */
+    private static function genreSummary(): array
+    {
         $db = App::pdo();
-        $st = $db->query("SELECT genre, COUNT(*) AS album_count,
-                          (SELECT COUNT(*) FROM songs s2 JOIN albums al2 ON al2.id = s2.album_id WHERE al2.genre = albums.genre) AS song_count
-                          FROM albums WHERE genre IS NOT NULL AND genre != ''
-                          GROUP BY genre ORDER BY genre");
-        App::json($st->fetchAll());
+        $db->exec("INSERT OR IGNORE INTO genres(name)
+                   SELECT DISTINCT genre FROM albums WHERE genre IS NOT NULL AND genre != ''");
+        $st = $db->query('SELECT g.name AS genre,
+                    (SELECT COUNT(*) FROM albums al WHERE al.genre = g.name) AS album_count,
+                    (SELECT COUNT(*) FROM songs s2 JOIN albums al2 ON al2.id = s2.album_id
+                     WHERE al2.genre = g.name) AS song_count
+                    FROM genres g ORDER BY g.name');
+
+        $genres = [];
+        foreach ($st->fetchAll() as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $genre = $row['genre'] ?? null;
+            $albumCount = $row['album_count'] ?? null;
+            $songCount = $row['song_count'] ?? null;
+            $genres[] = [
+                'genre' => is_string($genre) ? $genre : '',
+                'album_count' => is_numeric($albumCount) ? (int) $albumCount : 0,
+                'song_count' => is_numeric($songCount) ? (int) $songCount : 0,
+            ];
+        }
+
+        return $genres;
     }
 
     public static function home(): void
     {
         $db = App::pdo();
 
-        $genres = $db->query("SELECT genre, COUNT(*) AS album_count,
-                              (SELECT COUNT(*) FROM songs s2 JOIN albums al2 ON al2.id = s2.album_id WHERE al2.genre = albums.genre) AS song_count
-                              FROM albums WHERE genre IS NOT NULL AND genre != ''
-                              GROUP BY genre ORDER BY genre")->fetchAll();
+        $genres = self::genreSummary();
 
         $artists = $db->query('SELECT a.id, a.name, COUNT(s.id) AS song_count
                                FROM artists a LEFT JOIN songs s ON s.artist_id = a.id
@@ -589,7 +611,53 @@ final class Api
                 $settings[$key] = $value;
             }
         }
+        $settings['music_root'] = App::musicRoot();
+        $settings['user'] = Auth::currentLogin();
+        $settings['auth_enabled'] = Auth::enabled();
         App::json($settings);
+    }
+
+    /**
+     * Modifie l'emplacement de la bibliothèque musicale de l'utilisateur
+     * connecté (colonne music_root de data/users.db).
+     *
+     * Valide le nouveau dossier, met à jour le compte, recharge la
+     * configuration applicative puis relance l'indexation de cet utilisateur
+     * en arrière-plan si aucune analyse n'est déjà en cours.
+     *
+     * @param string|null $projectRoot Racine du projet, redéfinissable en test.
+     */
+    public static function config(?string $projectRoot = null): void
+    {
+        $projectRoot ??= dirname(__DIR__);
+        $login = Auth::currentLogin();
+        if ($login === null) {
+            App::err('Unauthorized', 401);
+        }
+        $body = file_get_contents('php://input');
+        $input = is_string($body) && $body !== '' ? json_decode($body, true) : null;
+        if (!is_array($input)) {
+            $input = $_POST;
+        }
+        $musicRoot = trim(self::stringValue($input['music_root'] ?? ''));
+        if ($musicRoot === '') {
+            App::err('Indiquez le dossier contenant vos fichiers de musique.');
+        }
+        if (!is_dir($musicRoot) || !is_readable($musicRoot)) {
+            App::err('Le dossier de musique doit exister et être lisible par le serveur.');
+        }
+
+        Users::updateMusicRoot($login, $musicRoot);
+        App::initConfig(Users::resolveConfig($login, Users::baseConfig()));
+
+        $scanStarted = false;
+        if (DB::setting('scan_running') !== '1' && Scanner::startBackgroundScan($projectRoot, $login)) {
+            DB::setSetting('scan_running', '1');
+            DB::setSetting('scan_started_at', (string) time());
+            $scanStarted = true;
+        }
+
+        App::json(['ok' => true, 'music_root' => App::musicRoot(), 'scan_started' => $scanStarted]);
     }
 
     public static function diag(): void
@@ -653,7 +721,8 @@ final class Api
         if (DB::setting('scan_running') === '1') {
             App::json(['ok' => false, 'running' => true]);
         }
-        if (!Scanner::startBackgroundScan($projectRoot ?? dirname(__DIR__))) {
+        $login = Auth::currentLogin();
+        if (!Scanner::startBackgroundScan($projectRoot ?? dirname(__DIR__), $login)) {
             App::err("Impossible de lancer le scan d'arrière-plan", 500);
         }
         DB::setSetting('scan_running', '1');

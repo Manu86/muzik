@@ -13,17 +13,15 @@ final class Installer
     private const AUDIO_EXTENSIONS = ['mp3', 'flac', 'ogg', 'm4a', 'wav'];
 
     /**
-     * L'application est considérée installée si config.local.php existe ou si
-     * le réglage « installed » vaut « 1 » dans SQLite.
+     * L'application est considérée installée dès qu'au moins un compte
+     * utilisateur existe dans la base méta (data/users.db).
      */
     public static function installed(?string $projectRoot = null): bool
     {
         $projectRoot ??= dirname(__DIR__);
-        if (is_file($projectRoot . '/config.local.php')) {
-            return true;
-        }
+        Users::ensureSchema($projectRoot);
 
-        return DB::setting('installed') === '1';
+        return Users::count() > 0;
     }
 
     /**
@@ -74,14 +72,6 @@ final class Installer
             'check' => 'Écriture dans data/',
             'ok' => $dataWritable,
             'detail' => $dataWritable ? 'OK' : 'autorisation manquante sur ' . $projectRoot . '/data',
-            'level' => 'required',
-        ];
-
-        $rootWritable = is_writable($projectRoot);
-        $checks[] = [
-            'check' => 'Écriture à la racine du projet',
-            'ok' => $rootWritable,
-            'detail' => $rootWritable ? 'OK' : 'nécessaire pour écrire config.local.php',
             'level' => 'required',
         ];
 
@@ -181,8 +171,8 @@ final class Installer
      *
      * Délègue à {@see Scanner::startBackgroundScan()}.
      */
-    public static function startBackgroundScan(string $projectRoot): bool
+    public static function startBackgroundScan(string $projectRoot, ?string $login = null): bool
     {
-        return Scanner::startBackgroundScan($projectRoot);
+        return Scanner::startBackgroundScan($projectRoot, $login);
     }
 }

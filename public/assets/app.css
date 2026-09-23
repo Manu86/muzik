@@ -141,6 +141,7 @@ body {
 
 /* Cards grid */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px; }
+.grid-top { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .card {
   background: var(--bg-2); border: 1px solid var(--border); border-radius: 12px;
   overflow: hidden; cursor: pointer; transition: border-color .15s;
@@ -343,6 +344,13 @@ body {
 #queue-list .empty { padding: 26px 0; font-size: 13px; }
 
 .empty { color: var(--muted); text-align: center; padding: 60px 0; }
+.err-sub { font-size: 13px; word-break: break-word; }
+button.retry {
+  margin-top: 14px; padding: 8px 18px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--panel); color: var(--accent);
+  cursor: pointer; font: inherit;
+}
+button.retry:hover { background: var(--border); }
 a.back, button.back { color: var(--accent); cursor: pointer; font-size: 14px; }
 button.back { background: none; border: none; padding: 0; font: inherit; }
 
@@ -473,6 +481,18 @@ button.back { background: none; border: none; padding: 0; font: inherit; }
 }
 #btn-rescan:hover:not(:disabled) { filter: brightness(1.08); }
 #btn-rescan:disabled { opacity: .5; cursor: default; }
+#btn-save-root {
+  background: var(--accent); color: #082015; border: 0; border-radius: 8px;
+  padding: 10px 16px; font-weight: 600; cursor: pointer;
+}
+#btn-save-root:hover:not(:disabled) { filter: brightness(1.08); }
+#btn-save-root:disabled { opacity: .5; cursor: default; }
+.settings-input {
+  flex: 1; min-width: 220px; box-sizing: border-box;
+  padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-3); color: var(--text); font-size: 14px;
+}
+.settings-input:focus { outline: none; border-color: var(--accent); }
 .settings-detail { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
 
 /* Émojis en noir & blanc */
@@ -500,6 +520,15 @@ button.back { background: none; border: none; padding: 0; font: inherit; }
   #queue-panel { left: 62px; max-height: 65vh; }
   #queue-head { padding: 10px 12px 6px; }
   #queue-list { padding: 4px 6px 10px; }
+}
+
+/* Deux cartes côte à côte sur les écrans étroits : avec des colonnes
+   minimales larges, le grille ne peut pas descendre sous une seule carte
+   par ligne. On force deux colonnes égales pour toutes les grilles de cartes. */
+@media (max-width: 480px) {
+  .grid, .home-grid, .genre-grid, .grid-top {
+    grid-template-columns: repeat(2, 1fr); gap: 10px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

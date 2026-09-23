@@ -5,7 +5,7 @@ Lecture seule (aucune écriture). Colonnes comparées :
   title, track, disc (song) ; year, genre (album) ; artist, album (artists/albums).
 
 Usage :
-  python3 bin/check-tags.py [--samples N] [--all FICHIER.CSV]
+  python3 bin/check-tags.py [--samples N] [--all FICHIER.CSV] [--user LOGIN]
 """
 import argparse
 import re
@@ -21,8 +21,10 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'lib'))
+from muzik_db import catalog_db  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
-DB = ROOT / 'data' / 'muzik.db'
 
 MP4_MAP = {
     'title': '\xa9nam',
@@ -193,9 +195,11 @@ def main() -> None:
                         help='nombre d\u2019écarts affichés par colonne')
     parser.add_argument('--all', metavar='FICHIER',
                         help='écris tous les écarts dans un CSV')
+    parser.add_argument('--user', metavar='LOGIN',
+                        help='compte ciblé (défaut : data/muzik.db ou premier utilisateur)')
     args = parser.parse_args()
 
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(catalog_db())
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
         'SELECT s.id, s.path, s.title AS db_title, s.track AS db_track, '

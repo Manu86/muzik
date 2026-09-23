@@ -58,39 +58,55 @@ Muzik est un lecteur de musique web auto-hébergé. Il indexe une bibliothèque 
 
 ## Installation
 
-Au premier lancement (absence de `config.local.php` et d’installation déjà
-marquée), Muzik affiche une page d’installation à `http://…/install.php`.
-Elle permet de :
+Au premier lancement (aucun compte n’existe encore dans `data/users.db`),
+Muzik affiche une page d’installation à `http://…/install.php`. Elle permet de
+:
 
 - vérifier les prérequis (PHP, extensions, dépendances `vendor/`, FFmpeg,
-  droits d’écriture) ;
+  droits d’écriture sur `data/`) ;
+- créer le compte utilisateur (identifiant et mot de passe) ;
 - indiquer où se trouvent les fichiers de musique (`music_root`) ;
-- régler le chemin FFmpeg et le débit de transcodage ;
-- protéger optionnellement l’application par mot de passe (Apache) ;
-- écrire `config.local.php` et lancer l’indexation initiale de la bibliothèque.
-  L’indexation démarre en arrière-plan (`bin/scan.php`) et se poursuit pendant
-  que l’interface s’ouvre ; ses journaux sont dans `data/scan-install.log`.
+- lancer l’indexation initiale de la bibliothèque. L’indexation démarre en
+  arrière-plan (`bin/scan.php --user <login>`) et se poursuit pendant que
+  l’interface s’ouvre ; ses journaux sont dans `data/scan-<login>.log`.
+
+Chaque compte possède **sa propre bibliothèque** : son identifiant, son mot de
+passe (haché en bcrypt), sa racine musicale et sa base SQLite
+(`data/<login>.db`) sont enregistrés dans la base des comptes `data/users.db`.
+La protection par mot de passe est active dès qu’au moins un compte existe.
+
+Une installation existante — unique utilisateur dans `config.local.php` (`auth_user`,
+`auth_hash`, `music_root`, `db_path`) — est **migrée automatiquement** au premier
+lancement : le compte et sa base (`data/muzik.db`) sont conservés tels quels.
+
+### Gérer les comptes en ligne de commande
+
+```bash
+php bin/users.php add <login> <password> <music_root>   # crée un compte
+php bin/users.php list [--json]                          # liste les comptes
+php bin/users.php music-root <login> <chemin>            # change la racine musicale
+php bin/users.php password <login> <nouveau>             # change le mot de passe
+php bin/users.php delete <login>                         # supprime le compte
+```
+
+La suppression d’un compte ne supprime ni sa base SQLite ni ses fichiers.
 
 La procédure manuelle reste possible :
 
 ```bash
 composer install
-cp config.local.example.php config.local.php
-# Adapter ensuite config.local.php à la machine
-php bin/scan.php
+php bin/users.php add <login> <password> /path/to/music
+php bin/scan.php --user <login>
 php -S 127.0.0.1:8080 -t public public/index.php
 ```
 
 L’application est alors accessible sur `http://127.0.0.1:8080`.
-Pour réafficher la page d’installation, supprimer `config.local.php` (et, si
-besoin, `data/muzik.db`).
+Pour réinitialiser l’installation, supprimez `data/users.db` (les bases et
+fichiers de musique sont conservés).
 
-La protection par mot de passe est gérée par l'application PHP elle-même,
-via des sessions et un hachage bcrypt : il suffit de renseigner `auth_user` et
-`auth_hash` dans [config.local.php](config.local.php). Tant que ces deux clés
-sont vides, toutes les routes restent ouvertes. La route `POST /api/login`
-ouvre une session et `POST /api/logout` la ferme ; chaque route protégée
-renvoie `401 {"error":"Unauthorized"}` tant qu'aucune session n'est établie.
+Aucune session n’est ouverte par défaut : `POST /api/login` établit une session,
+`POST /api/logout` la ferme, et chaque route protégée renvoie
+`401 {"error":"Unauthorized"}` tant qu’aucune session valide n’existe.
 
 Le projet contient aussi une configuration Apache optionnelle pour une
 installation sous `/muzik`, **sans** protection HTTP Basic en regard de
@@ -108,8 +124,8 @@ N'exposez pas l'application sur Internet sans HTTPS.
 ## Configuration
 
 Les valeurs portables se trouvent dans [config/app.php](config/app.php).
-[config.php](config.php) les charge puis applique, lorsqu'il existe, le fichier
-local `config.local.php` :
+[config.php](config.php) charge la configuration de base, puis surcharge,
+lorsqu’il existe, le fichier local `config.local.php` :
 
 ```php
 return [
@@ -124,42 +140,57 @@ return [
 
 | Clé | Rôle |
 |---|---|
-| `music_root` | Racine absolue de la bibliothèque musicale |
-| `db_path` | Chemin de la base SQLite |
 | `ffmpeg` | Exécutable FFmpeg utilisé pour le transcodage |
 | `transcode` | Débit par défaut en kbit/s, ou `0` pour la lecture directe |
-| `auth_user` | Nom d'utilisateur autorisé si la connexion est activée (laisser vide pour désactiver) |
-| `auth_hash` | Mot de passe haché en bcrypt (ex. `password_hash($motdepasse, PASSWORD_BCRYPT)`), jamais en clair |
+| `music_root` | Racine musicale par défaut de la base de catalogue par défaut (`db_path`) |
+| `db_path` | Base SQLite par défaut utilisée par les commandes historiques |
+| `auth_user` / `auth_hash` | **Réservés à la migration** d’une installation unique vers `data/users.db` au premier lancement |
 
+Avec plusieurs comptes, `music_root` et `db_path` sont choisis par utilisateur
+dans `data/users.db` (`bin/users.php add …` ou la page d’installation) ; les
+clés `auth_user`/`auth_hash` ne sont plus utilisées pour la protection (lue
+uniquement lors de la migration automatique). `config.local.php` fournit les
+valeurs globales (`ffmpeg`, `transcode`) sur la machine.
 
-Créez `config.local.php` à partir de `config.local.example.php`. Ce fichier
-n'est jamais versionné : les chemins de la bibliothèque et les autres choix
+Créez éventuellement `config.local.php` à partir de
+`config.local.example.php`. Ce fichier n'est jamais versionné : les choix
 propres à une machine ne sont donc pas publiés.
 
 Le répertoire `data/` est lui aussi ignoré, à l'exception de son fichier
-`.gitkeep`. La base SQLite, les journaux, les plans de tags et le catalogue local
-ne doivent jamais être ajoutés au dépôt.
+`.gitkeep`. Les bases SQLite (`users.db`, `muzik.db`, `<login>.db`), les
+journaux, les plans de tags et le catalogue local ne doivent jamais être
+ajoutés au dépôt.
 
 ## Indexer la bibliothèque
 
 ```bash
-# Scan incrémental : ajoute et met à jour les fichiers
-php bin/scan.php
+# Scan incrémental d'un utilisateur : ajoute et met à jour les fichiers
+php bin/scan.php --user <login>
 
 # Scan complet : supprime aussi de SQLite les entrées dont le fichier a disparu
-php bin/scan.php --full
+php bin/scan.php --user <login> --full
 ```
+
+Sans `--user`, `bin/scan.php` traite le premier compte de `data/users.db`.
+Les journaux de chaque exécution sont écrits dans `data/scan-<login>.log`.
 
 Formats reconnus : MP3, FLAC, OGG, M4A et WAV.
 
-Depuis l’interface, la vue « Réglages » lance un rescannage incrémental en
-arrière-plan ; son état (en cours ou dernière exécution) est affiché en temps
-réel et visible via l’API `POST /api/scan`.
+Depuis l’interface, la vue « Réglages » (voir le compte connecté) permet de
+modifier l’emplacement des fichiers musicaux du compte connecté : `PUT
+/api/config` met à jour l’utilisateur dans `data/users.db`, recharge la
+configuration et lance une indexation de cet utilisateur. Le même écran
+relance un rescannage incrémental en arrière-plan ; son état (en cours ou
+dernière exécution) est affiché en temps réel et visible via l’API
+`POST /api/scan`.
 
 Titre, artiste, album, année et genre sont lus dans les tags ID3 des fichiers
 MP3 (id3v2, repli id3v1). Le genre est normalisé dans une liste canonique
 (`App::normalizeGenre()`), ce qui alimente l’onglet « Genres » dès la première
-indexation — y compris pendant l’installation.
+indexation — y compris pendant l’installation. Chaque catalogue démarre d'ailleurs
+avec les genres canoniques déjà créés (base vide) : l'onglet n'est jamais vide,
+même avant la première indexation (`data/<login>.db`, table `genres`). Les genres
+issus des tags viennent compléter cette liste à l'indexation.
 
 Le scanner privilégie les tags audio. Lorsque ceux-ci sont absents ou génériques, il déduit artiste, album, disque, numéro de piste et titre depuis l’arborescence et le nom du fichier.
 
@@ -228,6 +259,12 @@ php bin/album-edit.php <id> --apply
 
 Sans `--apply`, les scripts de tags fonctionnent en mode simulation. Avec `--apply`, ils modifient les tags des fichiers musicaux. Sauvegardez la bibliothèque avant une opération massive.
 
+Sur une installation multi-comptes, toutes les commandes d’enrichissement
+(`fetch-art.php`, `fetch-artist-art.php`, `tag.php`, `album-resolve.php`,
+`album-edit.php`, `fix-titles.php`, `year-resolve.php`) ciblent le premier compte
+de `data/users.db` par défaut ; passez `--user <login>` pour en traiter un
+autre.
+
 ## Développement et qualité
 
 ```bash
@@ -239,7 +276,7 @@ composer cs-fix    # corrige le format
 composer quality   # exécute tous les contrôles précédents
 ```
 
-Les tests utilisent uniquement des bases et fichiers sous le répertoire temporaire du système. Ils ne doivent jamais accéder à `data/muzik.db` ni à la bibliothèque configurée.
+Les tests utilisent uniquement des bases et fichiers sous le répertoire temporaire du système. Ils ne doivent jamais accéder à `data/muzik.db`, `data/users.db` ni à la bibliothèque configurée.
 
 ## Publier le dépôt
 
@@ -257,9 +294,10 @@ git status
 git diff --cached --summary
 ```
 
-Les fichiers `config.local.php`, `config/apache-muzik.conf` et
-`data/muzik.db` ne doivent jamais apparaître dans la liste. La CI GitHub exécute
-la validation Composer et `composer quality` avec PHP 8.1 et PHP 8.4.
+Les fichiers `config.local.php`, `config/apache-muzik.conf`,
+`data/muzik.db` et `data/users.db` ne doivent jamais apparaître dans la liste.
+La CI GitHub exécute la validation Composer et `composer quality` avec PHP 8.1
+et PHP 8.4.
 
 ## Architecture
 
@@ -269,15 +307,17 @@ public/assets/app.js    interface et lecteur audio
 public/install.php      page d’installation au premier lancement
 config.php              charge la configuration publique puis locale
 config/app.php          valeurs portables versionnées
-config.local.php        valeurs propres à la machine, ignorées par Git
+config.local.php        valeurs globales propres à la machine, ignorées par Git
 src/Router.php          routage HTTP
 src/Api.php             API du catalogue et de la lecture
-src/Installer.php       contrôle des prérequis et écriture de la configuration
+src/Users.php           comptes utilisateurs (data/users.db) et bases par compte
+src/Auth.php            authentification par session
+src/Installer.php       contrôle des prérequis et création du premier compte
 src/Streamer.php        streaming direct et transcodage
 src/DB.php              connexion, schéma et migrations SQLite
 src/Scanner.php         indexation de la bibliothèque
-bin/                    commandes d’administration
-data/                   base, caches, plans et journaux locaux
+bin/                    commandes d’administration (dont bin/users.php)
+data/                   bases (users.db, muzik.db, <login>.db), caches, journaux
 tests/                  tests PHPUnit
 ```
 
@@ -298,10 +338,11 @@ La description exhaustive et lisible par les outils OpenAPI se trouve dans [open
 
 Points importants :
 
+- `PUT /api/config` change l’emplacement des musiques du **compte connecté** dans `data/users.db` depuis la vue « Réglages » ;
 - `DELETE /api/album/{id}` supprime réellement les pistes et les jaquettes situées sous `music_root` ;
 - l’ajout et le retrait des favoris utilisent encore des paramètres sur `GET /api/favorites` ;
 - la mise à jour d’un réglage utilise encore `GET /api/settings?set_key=...&value=...` ;
-- l’authentification est gérée par PHP : sessions et hachage bcrypt (`auth_user`/`auth_hash`), la protection Apache HTTP Basic n’est plus utilisée ;
+- l’authentification est gérée par PHP : sessions et hachage bcrypt des comptes de `data/users.db` (`bin/users.php`), les clés `auth_user`/`auth_hash` de `config.local.php` ne servent qu'à la migration initiale, et la protection Apache HTTP Basic n’est plus utilisée ;
 - le service worker conserve l’interface hors ligne, mais pas le catalogue ni les morceaux.
 
 ## Documentation pour les contributeurs automatisés

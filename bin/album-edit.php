@@ -18,6 +18,7 @@ if (!defined('MUZIK_INCLUDE_ONLY')) {
 
 require_once __DIR__ . '/../src/DB.php';
 require_once __DIR__ . '/../src/App.php';
+require_once __DIR__ . '/lib/bootstrap.php';
 
 if (defined('MUZIK_ALBUM_EDIT_INCLUDE_ONLY')) {
     return;
@@ -64,7 +65,7 @@ function albumEditPlan(PDO $pdo, int $albumId): array
     return ['album' => $album, 'plan' => $plan];
 }
 
-App::init(require __DIR__ . '/../config.php');
+App::initConfig(muzik_cli_config($argv));
 $pdo = App::pdo();
 
 $apply = in_array('--apply', $argv, true);

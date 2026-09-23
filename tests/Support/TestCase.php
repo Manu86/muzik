@@ -17,10 +17,18 @@ abstract class TestCase extends PHPUnitTestCase
         mkdir($directory, 0777, true);
         $this->temporaryDirectory = $directory;
 
+        Users::reset();
+        Users::init($this->temporaryDirectory . '/users.db');
+
         App::setJsonResponder(static function (mixed $data, int $status): never {
             throw new CapturedJsonResponse($data, $status);
         });
         $_GET = [];
+        $_POST = [];
+        $_SESSION = [];
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
         $_SERVER['REQUEST_METHOD'] = 'GET';
         unset($_SERVER['HTTP_RANGE'], $_SERVER['QUERY_STRING']);
         http_response_code(200);
@@ -29,9 +37,15 @@ abstract class TestCase extends PHPUnitTestCase
     protected function tearDown(): void
     {
         App::setJsonResponder(null);
+        $_SESSION = [];
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
         $this->removeDirectory($this->temporaryDirectory);
         $_GET = [];
+        $_POST = [];
         unset($_SERVER['HTTP_RANGE'], $_SERVER['QUERY_STRING']);
+        Users::reset();
         parent::tearDown();
     }
 
@@ -61,6 +75,19 @@ abstract class TestCase extends PHPUnitTestCase
         }
 
         self::fail('The callback did not emit a JSON response.');
+    }
+
+    /**
+     * Crée un compte utilisateur et ouvre une session pour celui-ci.
+     */
+    protected function createAndLoginUser(string $login = 'testuser', string $password = 'S3cretP@ss'): string
+    {
+        Users::create($login, $password, $this->temporaryDirectory . '/music');
+        if (!Auth::attempt($login, $password)) {
+            self::fail('Impossible d\'ouvrir la session de test.');
+        }
+
+        return $login;
     }
 
     private function removeDirectory(string $directory): void

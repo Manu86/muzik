@@ -19,7 +19,7 @@ final class InstallerTest extends TestCase
         self::assertContains('Dépendances PHP (vendor/)', $checks);
         self::assertContains('FFmpeg (transcodage)', $checks);
         self::assertContains('Écriture dans data/', $checks);
-        self::assertContains('Écriture à la racine du projet', $checks);
+        self::assertNotContains('Écriture à la racine du projet', $checks);
 
         foreach ($requirements as $check) {
             self::assertArrayHasKey('check', $check);
@@ -123,34 +123,62 @@ final class InstallerTest extends TestCase
         self::assertFalse(password_verify('wrong', $hash));
     }
 
-    public function testInstalledIsFalseBeforeAnyConfiguration(): void
+    public function testInstalledIsFalseBeforeAnyAccount(): void
     {
         $this->initialiseApp();
 
         self::assertFalse(Installer::installed($this->temporaryDirectory));
     }
 
-    public function testInstalledBecomesTrueWhenConfigFileExists(): void
+    public function testInstalledBecomesTrueWhenAnAccountExists(): void
     {
         $this->initialiseApp();
+        Users::create('paul', 'S3cretP@ss', $this->temporaryDirectory . '/music');
+
+        self::assertTrue(Installer::installed($this->temporaryDirectory));
+    }
+
+    public function testInstalledMigratesALegacyConfigFileIntoAnAccount(): void
+    {
+        $this->initialiseApp();
+        $hash = password_hash('S3cretP@ss', PASSWORD_BCRYPT);
         Installer::writeConfig($this->temporaryDirectory . '/config.local.php', [
             'music_root' => '/tmp/music',
             'db_path' => '/tmp/data.db',
             'ffmpeg' => '',
             'transcode' => 0,
+            'auth_user' => 'Emmanuel',
+            'auth_hash' => $hash,
         ]);
 
         self::assertTrue(Installer::installed($this->temporaryDirectory));
+
+        $profile = Users::find('emmanuel');
+        self::assertIsArray($profile);
+        self::assertSame('emmanuel', $profile['login']);
+        self::assertSame($hash, $profile['auth_hash']);
+        self::assertSame('/tmp/music', $profile['music_root']);
+        self::assertSame('/tmp/data.db', $profile['db_path']);
+        self::assertSame(1, Users::count());
     }
 
-    public function testInstalledBecomesTrueWhenMarkerIsSet(): void
+    public function testInstalledDoesNotDuplicateAnExistingAccountDuringMigration(): void
     {
         $this->initialiseApp();
-        self::assertFalse(Installer::installed($this->temporaryDirectory));
+        Users::create('emmanuel', 'S3cretP@ss', $this->temporaryDirectory . '/music');
+        $hash = password_hash('S3cretP@ss', PASSWORD_BCRYPT);
+        Installer::writeConfig($this->temporaryDirectory . '/config.local.php', [
+            'music_root' => '/tmp/music',
+            'db_path' => '/tmp/data.db',
+            'ffmpeg' => '',
+            'transcode' => 0,
+            'auth_user' => 'emmanuel',
+            'auth_hash' => $hash,
+        ]);
 
-        Installer::markInstalled();
+        Installer::installed($this->temporaryDirectory);
 
-        self::assertTrue(Installer::installed($this->temporaryDirectory));
+        self::assertSame(1, Users::count());
     }
 
     public function testCountAudioFilesCountsOnlyRecognisedExtensions(): void
@@ -177,7 +205,7 @@ final class InstallerTest extends TestCase
         self::assertFalse(Installer::startBackgroundScan($this->temporaryDirectory));
     }
 
-    public function testStartBackgroundScanSpawnsAnInstallerLog(): void
+    public function testStartBackgroundScanSpawnsAPerUserInstallerLog(): void
     {
         if (!function_exists('proc_open')) {
             $this->markTestSkipped('proc_open est désactivé.');
@@ -188,9 +216,9 @@ final class InstallerTest extends TestCase
         file_put_contents($this->temporaryDirectory . '/bin/scan.php', "<?php\n");
         mkdir($this->temporaryDirectory . '/data', 0777, true);
 
-        self::assertTrue(Installer::startBackgroundScan($this->temporaryDirectory));
+        self::assertTrue(Installer::startBackgroundScan($this->temporaryDirectory, 'testuser'));
 
         usleep(300000);
-        self::assertFileExists($this->temporaryDirectory . '/data/scan-install.log');
+        self::assertFileExists($this->temporaryDirectory . '/data/scan-testuser.log');
     }
 }

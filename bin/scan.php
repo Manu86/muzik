@@ -4,16 +4,19 @@ if (PHP_SAPI !== 'cli') {
     exit("Réservé à la ligne de commande\n");
 }
 
-$argv = $_SERVER['argv'] ?? [];
-$args = is_array($argv) ? $argv : [];
+$args = [];
+foreach ((array) ($_SERVER['argv'] ?? []) as $item) {
+    if (is_string($item)) {
+        $args[] = $item;
+    }
+}
 $full = in_array('--full', $args, true);
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/DB.php';
-require __DIR__ . '/../src/App.php';
 require __DIR__ . '/../src/Scanner.php';
+require __DIR__ . '/lib/bootstrap.php';
 
-App::initConfig(require __DIR__ . '/../config.php');
+App::initConfig(muzik_cli_config($args));
 
 set_time_limit(0);
 ini_set('memory_limit', '512M');

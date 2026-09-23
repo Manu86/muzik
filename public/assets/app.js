@@ -31,85 +31,6 @@ audio.autoplay = true;
 const audioBg = new Audio();
 audioBg.preload = 'auto';
 
-/* ============================================================ */
-/*  DIAGNOSTICS TEMPORAIRES — à retirer une fois le bug résolu  */
-/* ------------------------------------------------------------ */
-/*  Journalise les événements audio + rejets de play() + sommeil
- *  réseau dans localStorage, pour identifier la cause de l'arrêt
- *  de lecture écran verrouillé. Lecteur : 5 taps sur le titre du
- *  player dans #player-info.                                    */
-/* ============================================================ */
-const DIAG_KEY = 'muzik-diag-12';
-const DIAG_LOG = [];
-let diagBlobPlays = 0;
-let diagStreamPlays = 0;
-let diagFlushedAt = 0;
-function diagLog(ev, detail = '') {
-  let buf = '';
-  try {
-    if (audio.buffered.length) buf = Math.round(audio.buffered.end(audio.buffered.length - 1) * 10) / 10;
-  } catch {}
-  DIAG_LOG.push({
-    t: new Date().toISOString().slice(11, 23),
-    ms: Date.now(),
-    e: ev,
-    d: detail,
-    h: document.hidden ? 1 : 0,
-    ct: Math.round((audio.currentTime || 0) * 10) / 10,
-    ns: audio.networkState,
-    rs: audio.readyState,
-    buf,
-    dur: audio.duration && isFinite(audio.duration) ? Math.round(audio.duration) : 'inf',
-  });
-  while (DIAG_LOG.length > 400) DIAG_LOG.shift();
-  try { localStorage.setItem(DIAG_KEY, JSON.stringify(DIAG_LOG)); } catch {}
-}
-function diagFlush() {
-  if (!DIAG_LOG.length || Date.now() - diagFlushedAt < 10000) return;
-  diagFlushedAt = Date.now();
-  const body = JSON.stringify({ log: DIAG_LOG.slice(-300) });
-  if (navigator.sendBeacon) {
-    let blob;
-    try { blob = new Blob([body], { type: 'application/json' }); } catch { return; }
-    try { navigator.sendBeacon('api/diag', blob); } catch {}
-  } else {
-    fetch('api/diag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }).catch(() => {});
-  }
-}
-['loadstart', 'emptied', 'stalled', 'waiting', 'playing', 'pause', 'ended', 'error', 'durationchange', 'loadeddata'].forEach(evt => {
-  audio.addEventListener(evt, () => {
-    if (evt === 'error' && audio.error) {
-      const detail = 'code=' + audio.error.code + ' ' + (audio.error.name || '') + ' ' + (audio.error.message || '');
-      diagLog(evt, detail);
-      diagLog('marker-' + (audio.error.code === 2 ? 'reseau' : audio.error.code === 4 ? 'decodage' : 'autre'));
-    } else {
-      diagLog(evt);
-    }
-  });
-});
-const _nativePlay = audio.play.bind(audio);
-audio.play = (...args) => _nativePlay(...args).catch(err => {
-  diagLog('play-rejected', (err && err.name || '?') + ': ' + (err && err.message || ''));
-  throw err;
-});
-setInterval(() => {
-  if (document.hidden && wantPlay && audio.src) {
-    diagLog('hb5', 'src=' + audio.currentSrc.slice(0, 40) +
-      ' dur=' + (isFinite(audio.duration) ? Math.round(audio.duration) : 'inf') +
-      ' ct=' + Math.round(audio.currentTime));
-  }
-}, 5000);
-setInterval(() => {
-  if (!audio.paused && document.hidden && audio.src) { diagLog('heartbeat'); diagFlush(); }
-}, 20000);
-setInterval(() => {
-  if (document.hidden && wantPlay && audio.paused && audio.readyState >= 1 && audio.currentSrc && !transitionHold) {
-    diagLog('watchdog-play', 'rs=' + audio.readyState + ' ns=' + audio.networkState);
-    audio.play().catch(() => {});
-  }
-}, 4000);
-/* ============ FIN DIAGNOSTICS ============ */
-
 let wakeLock = null;
 let wantPlay = false;
 async function acquireWakeLock() {
@@ -125,11 +46,6 @@ function releaseWakeLock() {
   wakeLock = null;
 }
 document.addEventListener('visibilitychange', () => {
-  const last = DIAG_LOG[DIAG_LOG.length - 1];
-  if (document.visibilityState === 'visible' && last && last.ms && Date.now() - last.ms > 4000) {
-    diagLog('resume-gap', 'gap=' + Math.round((Date.now() - last.ms) / 1000) + 's');
-  }
-  diagLog('vis', document.visibilityState);
   if (document.visibilityState !== 'visible') {
     const entry = state.queue[state.index];
     if (wantPlay && entry && audio.currentSrc && !isLightSource(audio.currentSrc) && !audio.paused) {
@@ -139,11 +55,9 @@ document.addEventListener('visibilitychange', () => {
     return;
   }
   acquireWakeLock();
-  diagFlush();
   if (!audio.paused && audio.src) return;
   if (wantPlay && audio.paused && audio.src) audio.play().catch(() => {});
 });
-window.addEventListener('pagehide', diagFlush);
 
 /* ------------------------------------------------------------------ */
 /*  Util                                                               */
@@ -492,7 +406,18 @@ async function loadHome() {
   const el = $('#view-home');
   el.dataset.loaded = '1';
   el.innerHTML = '<div class="empty">Chargement…</div>';
-  const d = await api.get('api/home');
+  let d;
+  try {
+    d = await api.get('api/home');
+  } catch (err) {
+    el.dataset.loaded = '';
+    el.innerHTML = '<div class="empty">Chargement impossible.' +
+      '<br><span class="err-sub">' + esc(String((err && err.message) || err)) + '</span>' +
+      '<br><button type="button" class="retry" data-retry="home">Réessayer</button></div>';
+    const retry = el.querySelector('[data-retry="home"]');
+    if (retry) retry.addEventListener('click', () => loadHome());
+    return;
+  }
   const favIds = await getFavIds();
   el.innerHTML = `
     <div class="home-section">
@@ -1105,7 +1030,7 @@ function renderTopBody(el, d, favIds) {
     if (!d.albums.length) {
       html = '<div class="empty">Aucune écoute pour le moment.</div>';
     } else {
-      html = '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">' + d.albums.map(a => `
+      html = '<div class="grid grid-top">' + d.albums.map(a => `
         <div class="card" data-id="${a.id}">
           <div class="card-art"></div>
           <div class="card-body"><div class="t">${esc(a.name)}</div><div class="s">${esc(a.artist_name)} · ${a.plays}×</div></div>
@@ -1394,8 +1319,6 @@ function play() {
   state.playingId = id;
   setPlayBtn(true);
   const blob = cachedAudioUrl(id);
-  if (blob) diagBlobPlays++;
-  else diagStreamPlays++;
   const url = blob ? blob.url : audioUrl(id);
   const handoff = document.hidden && blob && !audio.paused && !!audio.currentSrc && audio.readyState >= 2;
   if (audio.currentSrc === url && audio.readyState >= 1) {
@@ -1404,16 +1327,13 @@ function play() {
     const oldBlob = activeBlob;
     if (blob) activeBlob = blob;
     handoffActive = true;
-    handoffNext(url, id, playToken, oldBlob);
+    handoffNext(url, playToken, oldBlob);
   } else {
     releaseActiveBlob();
     if (blob) activeBlob = blob;
     audio.src = url;
   }
   if (document.hidden && !blob) bgBlobSwap(id, audio.currentTime || 0);
-  diagLog('transition', 'blob=' + (blob ? 1 : 0) +
-    ' prefetch=' + prefetched.size + '/' + prefetchPending.size + '/' + prefetchQueue.length +
-    ' bytes=' + Math.round(prefetchBytes / 1048576) + 'M');
   if (!handoff) startPlayback();
   acquireWakeLock();
   refreshSongInfo();
@@ -1429,8 +1349,7 @@ function play() {
    dernières secondes, puis `audio` reprend la même source sans jamais
    passer par un état paused. Android ne révoque ainsi pas la session
    audio de l'onglet caché. */
-function handoffNext(url, id, token, oldBlob) {
-  diagLog('handoff', 'id=' + id + ' start');
+function handoffNext(url, token, oldBlob) {
   audioBg.src = url;
   let finished = false;
   let dwellTimer = null;
@@ -1448,10 +1367,8 @@ function handoffNext(url, id, token, oldBlob) {
       if (dwellTimer) clearTimeout(dwellTimer);
       dwellTimer = setTimeout(() => {
         if (!audio.paused && token === playToken && !finished) {
-          const pos = audio.currentTime || 0;
           finish();
           handoffActive = false;
-          diagLog('handoff-ok', 'id=' + id + ' pos=' + Math.round(pos * 10) / 10);
         }
       }, 1500);
     }
@@ -1504,7 +1421,6 @@ function handoffNext(url, id, token, oldBlob) {
       releaseOld();
       audio.src = url;
       startPlayback();
-      diagLog('handoff-timeout', 'id=' + id);
     }
   }, 5000);
   audioBg.addEventListener('canplay', bridge);
@@ -1586,7 +1502,6 @@ function bgBlobSwap(entryId, pos) {
   const token = playToken;
   const ctrl = new AbortController();
   bgBlobCtrl = ctrl;
-  diagLog('bg-switch', 'ct=' + Math.round(pos * 10) / 10 + ' pending');
   fetch(streamUrl(String(entryId), bgBitrate()), { signal: ctrl.signal })
     .then(res => {
       if (!res.ok) throw new Error('nok');
@@ -1596,8 +1511,6 @@ function bgBlobSwap(entryId, pos) {
       if (token !== playToken || !wantPlay || !document.hidden) return;
       const url = URL.createObjectURL(blob);
       const cur = audio.currentTime || pos || 0;
-      diagLog('bg-blob-swap', 'ct=' + Math.round(cur * 10) / 10 +
-        ' size=' + Math.round(blob.size / 1024) + 'K');
       releaseActiveBlob();
       activeBlob = { url, size: blob.size };
       audio.src = url;
@@ -1639,7 +1552,6 @@ function fetchPrefetch(key, ctrl, tries) {
     .catch(err => {
       if (err && err.name === 'AbortError') throw err;
       if ((tries || 0) >= 2) {
-        diagLog('prefetch-fail', key);
         throw err;
       }
       return fetchPrefetch(key, ctrl, (tries || 0) + 1);
@@ -1902,7 +1814,6 @@ function endOfTrack() {
   if (transitionHold && transitionHold.token === playToken) return;
   const nextId = nextTrackId();
   if (nextId && document.hidden && !prefetched.has(nextId)) {
-    diagLog('hold-next', 'id=' + nextId + ' prefetch=' + prefetched.size + '/' + prefetchPending.size + '/' + prefetchQueue.length);
     prefetchNow(nextId);
     const holdTailAt = () => {
       try {
@@ -1912,7 +1823,6 @@ function endOfTrack() {
           audio.currentTime = 0;
         }
       } catch {}
-      diagLog('hold-loop', 'id=' + nextId);
       audio.play().catch(() => {});
     };
     transitionHold = { token: playToken, id: nextId, holdTailAt };
@@ -1934,7 +1844,6 @@ function endOfTrack() {
       }
       if (waits >= 120) {
         clearTransitionHold();
-        diagLog('hold-timeout', 'id=' + nextId);
         next();
       }
     }, 500);
@@ -1946,15 +1855,11 @@ function endOfTrack() {
 audio.addEventListener('ended', () => {
   if (handoffActive) return;
   if (!audio.ended && !(audio.duration && audio.currentTime >= audio.duration - 0.25)) return;
-  diagLog('ended', 'hidden=' + (document.hidden ? 1 : 0) +
-    ' prefetch=' + prefetched.size + '/' + prefetchPending.size +
-    ' nextId=' + (state.queue[state.index + 1] ? state.queue[state.index + 1].id : '?'));
   endOfTrack();
 });
 
 audio.addEventListener('error', () => {
   const t = playToken;
-  diagLog('error-handler', audio.error ? 'code=' + audio.error.code : '?');
   if (!state.queue.length || !state.playingId) return;
   const code = audio.error ? audio.error.code : -1;
   if (code === 4) {
@@ -2023,8 +1928,6 @@ audio.addEventListener('timeupdate', () => {
       const lead = 2;
       if (remain > 0 && remain <= lead) {
         earlyAdvanced = true;
-        diagLog('earlyadv', 'remain=' + remain.toFixed(2) +
-          ' prefetch=' + prefetched.size + '/' + prefetchPending.size);
         endOfTrack();
       }
     }
@@ -2163,8 +2066,23 @@ function fmtDateTime(unixTs) {
 function renderSettingsView() {
   $('#view-settings').innerHTML =
     '<div class="view-header">' + pictoIcon('settings') + '<h2>Réglages</h2></div>' +
+    '<section class="settings-section" aria-labelledby="settings-account-title">' +
+      '<h3 id="settings-account-title">Compte</h3>' +
+      '<p class="settings-desc">Instance connectée : ' +
+        '<strong id="settings-account-login">…</strong>' +
+      '</p>' +
+    '</section>' +
     '<section class="settings-section" aria-labelledby="settings-lib-title">' +
-      '<h3 id="settings-lib-title">Bibliothèque</h3>' +
+      '<h3 id="settings-lib-title">Emplacement des musiques</h3>' +
+      '<p class="settings-desc">Chemin absolu du dossier contenant vos fichiers (MP3, FLAC, OGG, M4A, WAV).</p>' +
+      '<div class="settings-row">' +
+        '<input type="text" id="settings-music-root" class="settings-input" placeholder="/chemin/vers/ma/musique" autocomplete="off">' +
+        '<button id="btn-save-root" type="button">Enregistrer</button>' +
+      '</div>' +
+      '<p class="settings-detail" id="root-save-status" role="status"></p>' +
+    '</section>' +
+    '<section class="settings-section" aria-labelledby="settings-scan-title">' +
+      '<h3 id="settings-scan-title">Bibliothèque</h3>' +
       '<p class="settings-desc">Relance une analyse de la bibliothèque en arrière-plan pour détecter de nouveaux fichiers.</p>' +
       '<div class="settings-row">' +
         '<span id="scan-status" role="status" aria-live="polite">Chargement…</span>' +
@@ -2173,11 +2091,56 @@ function renderSettingsView() {
       '<p class="settings-detail" id="scan-detail"></p>' +
     '</section>';
   $('#btn-rescan').addEventListener('click', triggerScan);
+  $('#btn-save-root').addEventListener('click', saveMusicRoot);
 }
 
 async function loadSettingsView() {
   renderSettingsView();
+  await loadMusicRootField();
   await refreshScanStatus();
+}
+
+async function loadMusicRootField() {
+  let s = {};
+  try {
+    s = await api.get('api/settings');
+  } catch {}
+  const input = $('#settings-music-root');
+  if (input && s.music_root) input.value = s.music_root;
+  const loginEl = $('#settings-account-login');
+  if (loginEl) loginEl.textContent = s.user || 'inconnu';
+}
+
+async function saveMusicRoot() {
+  const input = $('#settings-music-root');
+  const btn = $('#btn-save-root');
+  const status = $('#root-save-status');
+  if (!input || !btn || !status) return;
+  const path = input.value.trim();
+  if (path === '') {
+    status.textContent = 'Indiquez le dossier contenant vos fichiers de musique.';
+    return;
+  }
+  btn.disabled = true;
+  status.textContent = 'Enregistrement en cours…';
+  try {
+    const r = await fetch('api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ music_root: path }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body && body.error ? body.error : 'Réponse inattendue du serveur.');
+    input.value = body.music_root || path;
+    status.textContent = body.scan_started
+      ? 'Emplacement enregistré. Indexation de la bibliothèque lancée.'
+      : 'Emplacement enregistré.';
+    await refreshScanStatus();
+  } catch (e) {
+    status.textContent = 'Impossible d\'enregistrer l\'emplacement : ' + (e && e.message ? e.message : 'erreur serveur.');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function refreshScanStatus() {

@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 /**
- * Authentification propre à l'application, par session PHP.
+ * Authentification multi-utilisateurs, par session PHP.
  *
- * La protection n'est active que lorsque la configuration contient un nom
- * d'utilisateur (`auth_user`) et un hachage bcrypt (`auth_hash`) non vides.
- * Tant qu'elle est désactivée, toutes les routes restent ouvertes.
+ * Les comptes vivent dans la base méta (Users, data/users.db). La protection est
+ * active dès qu'au moins un compte existe. La session mémorise le login ; chaque
+ * requête protégée ouvre le catalogue de l'utilisateur correspondant.
  */
 final class Auth
 {
@@ -16,49 +16,62 @@ final class Auth
     private const REMEMBER_LIFETIME = 2592000;
 
     /**
-     * Une authentification est configurée lorsque le nom d'utilisateur et son
-     * hachage sont renseignés dans la configuration.
+     * La protection est configurée lorsque la base des comptes contient au
+     * moins un utilisateur.
      */
     public static function enabled(): bool
     {
-        $user = App::config('auth_user');
-        $hash = App::config('auth_hash');
+        return Users::count() > 0;
+    }
 
-        return is_string($user) && $user !== '' && is_string($hash) && $hash !== '';
+    /**
+     * Login de l'utilisateur connecté, ou null hors session valide.
+     */
+    public static function currentLogin(): ?string
+    {
+        if (!self::enabled()) {
+            return null;
+        }
+        self::start();
+        $login = $_SESSION[self::SESSION_KEY] ?? null;
+        if (!is_string($login) || $login === '') {
+            return null;
+        }
+
+        return Users::find($login) !== null ? $login : null;
     }
 
     /**
      * Vrai lorsque l'utilisateur est connecté, ou lorsque la protection est
-     * désactivée (aucune session n'est alors ouverte).
+     * désactivée (aucune session n'est alors nécessaire).
      */
     public static function check(): bool
     {
         if (!self::enabled()) {
             return true;
         }
-        self::start();
 
-        return ($_SESSION[self::SESSION_KEY] ?? false) === true;
+        return self::currentLogin() !== null;
     }
 
     /**
-     * Tente une connexion avec les identifiants de la configuration.
+     * Tente une connexion avec les identifiants d'un compte de data/users.db.
      */
     public static function attempt(string $user, string $password, bool $remember = false): bool
     {
-        if (!self::enabled() || $password === '') {
+        $login = Users::normalizeLogin($user);
+        if ($login === '' || $password === '') {
             return false;
         }
-        $expectedUser = App::config('auth_user');
-        $hash = App::config('auth_hash');
-        if (!is_string($expectedUser) || !is_string($hash) || !hash_equals($expectedUser, $user)
-            || !password_verify($password, $hash)) {
+        $profile = Users::find($login);
+        if ($profile === null || !hash_equals($login, $profile['login'] ?? '')
+            || !password_verify($password, $profile['auth_hash'] ?? '')) {
             return false;
         }
 
         self::start($remember ? self::REMEMBER_LIFETIME : 0);
         session_regenerate_id(true);
-        $_SESSION[self::SESSION_KEY] = true;
+        $_SESSION[self::SESSION_KEY] = $login;
 
         return true;
     }

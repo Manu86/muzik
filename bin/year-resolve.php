@@ -15,8 +15,9 @@ define('MUZIK_INCLUDE_ONLY', true);
 require __DIR__ . '/../src/DB.php';
 require __DIR__ . '/../src/App.php';
 require __DIR__ . '/fetch-art.php';
+require __DIR__ . '/lib/bootstrap.php';
 
-App::init(require __DIR__ . '/../config.php');
+App::initConfig(muzik_cli_config($argv));
 $pdo = App::pdo();
 
 ini_set('default_socket_timeout', '10');
@@ -304,7 +305,7 @@ fclose($log);
 echo "\nRésolution : $resolved albums / $total, $skipped sans année (dans le log).\n";
 
 if (!$apply) {
-    echo "DRY-RUN — base non modifiée (lancez avec --apply pour écrire).\n";
+    echo "DRY-RUN — cache écrit ($cacheFile) ; base non modifiée (lancez avec --apply pour écrire).\n";
     exit(0);
 }
 

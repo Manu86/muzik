@@ -77,18 +77,19 @@ if (defined('MUZIK_ARTIST_ART_INCLUDE_ONLY')) {
 
 require_once __DIR__ . '/../src/DB.php';
 require_once __DIR__ . '/../src/App.php';
+require_once __DIR__ . '/lib/bootstrap.php';
 
 $apply = in_array('--apply', $argv, true);
 $force = in_array('--force', $argv, true);
-$config = require __DIR__ . '/../config.php';
+$config = muzik_cli_config($argv);
+App::initConfig($config);
+$database = realpath((string) ($config['db_path'] ?? ''));
+if ($database === false) {
+    throw new RuntimeException('Base SQLite introuvable.');
+}
 if ($apply) {
-    App::init($config);
     $pdo = App::pdo();
 } else {
-    $database = realpath((string) ($config['db_path'] ?? ''));
-    if ($database === false) {
-        throw new RuntimeException('Base SQLite introuvable.');
-    }
     $pdo = new PDO('sqlite:file:' . $database . '?immutable=1', null, null, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -157,7 +158,7 @@ file_put_contents(
 echo PHP_EOL . count($matches) . " correspondance(s) exacte(s), $generic nom(s) générique(s), "
     . "$missing sans résultat." . PHP_EOL;
 if (!$apply) {
-    echo 'DRY-RUN — aucune image téléchargée, base inchangée.' . PHP_EOL;
+    echo 'DRY-RUN — cache et log mis à jour ; aucune image téléchargée, base inchangée.' . PHP_EOL;
     exit(0);
 }
 

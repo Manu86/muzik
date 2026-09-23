@@ -30,12 +30,12 @@ final class Scanner
      * Évite de bloquer le serveur web pendant l'indexation (un serveur de
      * développement ou un hébergement partagé peut être mono-processus). Le
      * processus est détaché : il continue après la réponse HTTP et écrit ses
-     * journaux dans data/scan-install.log.
+     * journaux dans data/scan-<login>.log (ou scan-install.log sans login).
      *
      * Retourne false si aucun processus n'a pu être détaché — l'appelant doit
      * alors scanner de façon synchrone.
      */
-    public static function startBackgroundScan(string $projectRoot): bool
+    public static function startBackgroundScan(string $projectRoot, ?string $login = null): bool
     {
         if (!function_exists('proc_open')) {
             return false;
@@ -45,7 +45,7 @@ final class Scanner
             return false;
         }
 
-        $log = $projectRoot . '/data/scan-install.log';
+        $log = $projectRoot . '/data/scan-' . ($login !== null && $login !== '' ? $login : 'install') . '.log';
         @mkdir($projectRoot . '/data', 0777, true);
 
         if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'cli-server') {
@@ -54,8 +54,14 @@ final class Scanner
             $phpBinary = PHP_BINARY;
         }
 
+        $command = [$phpBinary, $script];
+        if ($login !== null && $login !== '') {
+            $command[] = '--user';
+            $command[] = $login;
+        }
+
         $process = @proc_open(
-            [$phpBinary, $script],
+            $command,
             [
                 0 => ['file', '/dev/null', 'r'],
                 1 => ['file', $log, 'a'],

@@ -5,7 +5,7 @@
  * met à jour la base et, en mode --apply, écrit le tag album (via tag_apply.py).
  *
  * Usage :
- *   php bin/album-resolve.php            # dry-run (aucun fichier ni base modifié)
+ *   php bin/album-resolve.php            # dry-run (cache et plan mis à jour, fichiers et base intacts)
  *   php bin/album-resolve.php --apply    # écrit les tags + met à jour la base
  *   php bin/album-resolve.php --limit N  # ne traite que N albums (test)
  *   php bin/album-resolve.php --force    # re-tente les échecs en cache
@@ -18,12 +18,13 @@ if (!defined('MUZIK_INCLUDE_ONLY')) {
 require_once __DIR__ . '/../src/DB.php';
 require_once __DIR__ . '/../src/App.php';
 require_once __DIR__ . '/fetch-art.php';
+require_once __DIR__ . '/lib/bootstrap.php';
 
 if (defined('MUZIK_ALBUM_RESOLVE_INCLUDE_ONLY')) {
     return;
 }
 
-App::init(require __DIR__ . '/../config.php');
+App::initConfig(muzik_cli_config($argv));
 $pdo = App::pdo();
 
 ini_set('default_socket_timeout', '10');
@@ -238,24 +239,35 @@ $plan = [];
 
 foreach ($rows as $row) {
     $aid = (int) $row['album_id'];
-    $artist = cleanArtistName($row['artist']);
-    $currentAlbum = trim($row['album'] ?? '') ?: 'Sans album';
-
-    $resolved = null;
-    if (!$force && array_key_exists($aid, $cache)) {
-        if ($cache[$aid] !== null) {
-            $resolved = $cache[$aid];
-        } else {
-            $skipped++;
-            continue;
-        }
+    if (!isset($plan[$aid])) {
+        $plan[$aid] = [
+            'artist_id' => (int) $row['artist_id'],
+            'artist'    => cleanArtistName($row['artist']),
+            'rows'      => [],
+            'resolved'  => null,
+            'attempted' => false,
+        ];
     }
-    if ($resolved === null) {
-        $resolved = resolveTrack($row) ?? null;
+    $plan[$aid]['rows'][] = $row;
+
+    if ($plan[$aid]['attempted']) {
+        continue;
+    }
+    $plan[$aid]['attempted'] = true;
+
+    $first = $plan[$aid]['rows'][0];
+    $artist = $plan[$aid]['artist'];
+    $currentAlbum = trim($first['album'] ?? '') ?: 'Sans album';
+
+    if (!$force && array_key_exists($aid, $cache)) {
+        $resolved = $cache[$aid] !== null ? $cache[$aid] : false;
+    } else {
+        $resolved = resolveTrack($first) ?? null;
         $cache[$aid] = $resolved;
     }
+    $plan[$aid]['resolved'] = $resolved;
 
-    if ($resolved === null) {
+    if ($resolved === null || $resolved === false) {
         resolveLog("[$aid] sans album trouvé : $artist / $currentAlbum");
         $skipped++;
         echo "[$aid] AUCUNE — $artist / $currentAlbum\n";
@@ -266,20 +278,14 @@ foreach ($rows as $row) {
     echo "[$aid] ALBUM({$resolved['source']}) $artist / $currentAlbum => {$resolved['album']}"
        . ($resolved['year'] ? " ({$resolved['year']})" : '')
        . ($resolved['genre'] ? " — {$resolved['genre']}" : '') . "\n";
-
-    $plan[$aid] = [
-        'row'      => $row,
-        'artist'   => $artist,
-        'resolved' => $resolved,
-    ];
 }
 
 file_put_contents($cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-echo "\nRésolution : $found albums trouvés / $total, $skipped sans résultat.\n";
+echo "\nRésolution : $found albums trouvés / $total pistes « Sans album », $skipped sans résultat.\n";
 
 if (!$apply) {
-    echo "DRY-RUN — aucun fichier ni base modifiés (lancez avec --apply pour écrire).\n";
+    echo "DRY-RUN — cache écrit ($cacheFile) ; aucun fichier audio ni base modifiés (lancez avec --apply pour écrire).\n";
     fclose($log);
     exit(0);
 }
@@ -289,9 +295,12 @@ echo "Application des résultats…\n";
 
 $moved = 0;
 $renamed = 0;
+$planOut = [];
 
 foreach ($plan as $aid => $p) {
-    $row = $p['row'];
+    if ($p['resolved'] === null || $p['resolved'] === false) {
+        continue;
+    }
     $artist = $p['artist'];
     $albumName = trim(preg_replace('/\s+/', ' ', $p['resolved']['album']));
     $year = $p['resolved']['year'];
@@ -302,33 +311,37 @@ foreach ($plan as $aid => $p) {
 
     // album cible existant (même artiste + même nom) ?
     $st = $pdo->prepare('SELECT id FROM albums WHERE artist_id = ? AND name = ? AND id != ?');
-    $st->execute([(int) $row['artist_id'], $albumName, $aid]);
+    $st->execute([$p['artist_id'], $albumName, $aid]);
     $targetId = $st->fetchColumn();
 
     if ($targetId !== false) {
-        $pdo->prepare('UPDATE songs SET album_id = ? WHERE id = ?')
-            ->execute([(int) $targetId, (int) $row['song_id']]);
+        foreach ($p['rows'] as $row) {
+            $pdo->prepare('UPDATE songs SET album_id = ? WHERE id = ?')
+                ->execute([(int) $targetId, (int) $row['song_id']]);
+            $moved++;
+        }
         if ($year || $genre) {
             $pdo->prepare('UPDATE albums SET year = COALESCE(year, ?), genre = COALESCE(genre, ?) WHERE id = ?')
                 ->execute([$year, $genre, (int) $targetId]);
         }
-        $moved++;
     } else {
         $pdo->prepare('UPDATE albums SET name = ?, year = COALESCE(year, ?), genre = COALESCE(genre, ?) WHERE id = ?')
             ->execute([$albumName, $year, $genre, $aid]);
-        $renamed++;
+        $renamed += count($p['rows']);
     }
 
-    $planOut[] = [
-        'path'   => $row['path'],
-        'title'  => $row['title'],
-        'artist' => $artist,
-        'album'  => $albumName,
-        'track'  => $row['track'],
-        'disc'   => $row['disc'],
-        'year'   => $year ?: ($row['year'] ?? null),
-        'genre'  => $genre ?: ($p['row']['genre'] ?? null),
-    ];
+    foreach ($p['rows'] as $row) {
+        $planOut[] = [
+            'path'   => $row['path'],
+            'title'  => $row['title'],
+            'artist' => $artist,
+            'album'  => $albumName,
+            'track'  => $row['track'],
+            'disc'   => $row['disc'],
+            'year'   => $year ?: ($row['year'] ?? null),
+            'genre'  => $genre ?: ($row['genre'] ?? null),
+        ];
+    }
 }
 
 // nettoyage des albums laissés vides après déplacement

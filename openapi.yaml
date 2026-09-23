@@ -6,10 +6,12 @@ info:
     API HTTP du lecteur musical Muzik. Les chemins sont relatifs au point de
     montage de l'application, généralement `/muzik` sous Apache.
 
-    L'authentification éventuelle est assurée par l'application PHP (session,
-    hachage bcrypt en configuration) : les routes protégées renvoient 401 tant
-    que POST /api/login n'a pas établi de session. La route de suppression
-    d'album efface des fichiers.
+    Chaque compte utilisateur possède sa propre bibliothèque : la base de
+    données et la racine musicale sont celles de l'utilisateur connecté.
+    L'authentification est assurée par l'application PHP (session, hachage
+    bcrypt des mots de passe dans `data/users.db`) : les routes protégées
+    renvoient 401 tant que `POST /api/login` n'a pas établi de session. La
+    route de suppression d'album efface des fichiers.
 servers:
   - url: /muzik
     description: Déploiement Apache fourni
@@ -585,6 +587,10 @@ paths:
       tags: [Catalogue]
       summary: Liste les genres
       operationId: getGenres
+      description: >
+        Genres canoniques pré-créés du catalogue (même avant toute indexation)
+        avec le nombre d'albums et de pistes du genre ; les genres lus dans les
+        tags s'ajoutent à la liste dès l'indexation.
       responses:
         '200':
           description: Genres et nombres d'albums et de pistes.
@@ -832,6 +838,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/config:
+    put:
+      tags: [Bibliothèque]
+      summary: Modifie l'emplacement de la bibliothèque musicale
+      description: |
+        Déplace la bibliothèque musicale du compte connecté. Met à jour la
+        ligne `users` de `data/users.db` (music_root), recharge la
+        configuration et relance l'indexation de cet utilisateur en
+        arrière-plan si aucune analyse n'est en cours. Élément de la page
+        « Réglages » de l'interface.
+      operationId: updateConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [music_root]
+              properties:
+                music_root:
+                  type: string
+                  description: Chemin absolu du dossier contenant les pistes (MP3, FLAC, OGG, M4A, WAV).
+      responses:
+        '200':
+          description: Emplacement enregistré.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, music_root, scan_started]
+                properties:
+                  ok:
+                    const: true
+                  music_root:
+                    type: string
+                  scan_started:
+                    type: boolean
+                    description: Vrai si une nouvelle indexation a été lancée.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 components:
   parameters:
     Id:

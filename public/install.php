@@ -34,12 +34,14 @@ if (!is_file(__DIR__ . '/../vendor/autoload.php') || !is_dir(__DIR__ . '/../vend
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../src/DB.php';
 require __DIR__ . '/../src/App.php';
+require __DIR__ . '/../src/Users.php';
 require __DIR__ . '/../src/Installer.php';
 require __DIR__ . '/../src/Scanner.php';
 
-App::initConfig(require __DIR__ . '/../config.php');
-
+$base = require __DIR__ . '/../config.php';
 $projectRoot = dirname(__DIR__);
+
+Users::ensureSchema($projectRoot);
 
 if (Installer::installed($projectRoot)) {
     header('Location: ./');
@@ -51,79 +53,41 @@ $errors = [];
 /** @var array{added: ?int, scan_error: ?string, background: bool}|null $result */
 $result = null;
 
-$musicRoot = App::config('music_root');
-$ffmpegDefault = Installer::detectFfmpeg() ?? '';
-$transcodeDefault = App::config('transcode');
-
+$postUser = trim((string) ($_POST['user'] ?? ''));
 $postMusicRoot = trim((string) ($_POST['music_root'] ?? ''));
-$postFfmpeg = trim((string) ($_POST['ffmpeg'] ?? ''));
-$postTranscode = (int) ($_POST['transcode'] ?? -1);
-$postUser = trim((string) ($_POST['auth_user'] ?? ''));
-$postPassDefined = isset($_POST['auth_pass']);
+$postPassDefined = isset($_POST['pass']);
+$adminPass = $postPassDefined ? (string) $_POST['pass'] : '';
+$adminPass2 = array_key_exists('pass2', $_POST) ? (string) $_POST['pass2'] : '';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    $musicRootValue = $postMusicRoot;
-    $ffmpegValue = $postFfmpeg;
-    $transcodeValue = in_array($postTranscode, [0, 128, 192, 256, 320], true) ? $postTranscode : -1;
-    $adminUser = trim((string) $postUser);
-    $adminPass = $postPassDefined ? (string) $_POST['auth_pass'] : '';
-    $adminPass2 = array_key_exists('auth_pass2', $_POST)
-        ? (string) $_POST['auth_pass2']
-        : '';
+    if (Users::normalizeLogin($postUser) === '') {
+        $errors[] = 'Identifiant invalide (minuscules, chiffres, tirets, 1 à 32 caractères).';
+    } elseif ($postUser === '') {
+        $errors[] = 'Indiquez un nom d\'utilisateur.';
+    }
 
-    if (!is_string($musicRootValue) || $musicRootValue === '') {
+    if (!is_string($postMusicRoot) || $postMusicRoot === '') {
         $errors[] = 'Indiquez le dossier contenant vos fichiers de musique.';
-    } elseif (!is_dir($musicRootValue) || !is_readable($musicRootValue)) {
+    } elseif (!is_dir($postMusicRoot) || !is_readable($postMusicRoot)) {
         $errors[] = 'Le dossier de musique doit exister et être lisible par le serveur.';
     }
 
-    if ($ffmpegValue !== '' && !is_executable($ffmpegValue)) {
-        $errors[] = 'Le chemin FFmpeg indiqué n\'est pas un exécutable accessible.';
+    if (mb_strlen($adminPass) < 8) {
+        $errors[] = 'Le mot de passe doit contenir au moins 8 caractères.';
     }
-
-    if ($transcodeValue === -1) {
-        $errors[] = 'Le débit de transcodage choisi est invalide.';
-    }
-
-    if ($adminUser !== '' && $adminPass === '') {
-        $errors[] = 'L\'utilisateur ne peut pas être défini sans mot de passe.';
-    }
-    if ($adminPass !== '') {
-        if (mb_strlen($adminPass) < 8) {
-            $errors[] = 'Le mot de passe doit contenir au moins 8 caractères.';
-        }
-        if ($adminPass !== $adminPass2) {
-            $errors[] = 'Le mot de passe et sa confirmation diffèrent.';
-        }
+    if ($adminPass !== $adminPass2) {
+        $errors[] = 'Le mot de passe et sa confirmation diffèrent.';
     }
 
     if ($errors === []) {
-        $dbPath = App::config('db_path');
-        $dbPathValue = is_string($dbPath) && $dbPath !== '' ? $dbPath : $projectRoot . '/data/muzik.db';
+        try {
+            Users::create($postUser, $adminPass, $postMusicRoot);
+            $createdLogin = Users::normalizeLogin($postUser);
 
-        $adminAuth = $adminPass !== '' ? [
-            'auth_user' => $adminUser,
-            'auth_hash' => Installer::hashPassword($adminPass),
-        ] : [];
-
-        $written = Installer::writeConfig($projectRoot . '/config.local.php', array_replace([
-            'music_root' => $musicRootValue,
-            'db_path' => $dbPathValue,
-            'ffmpeg' => $ffmpegValue,
-            'transcode' => $transcodeValue,
-        ], $adminAuth));
-
-        if ($written) {
-            unset($musicRootValue, $ffmpegValue, $transcodeValue, $adminAuth);
-            App::initConfig(require $projectRoot . '/config.php');
-        }
-
-        if ($written) {
-            Installer::markInstalled();
-
-            if (Installer::startBackgroundScan($projectRoot)) {
+            if (Installer::startBackgroundScan($projectRoot, $createdLogin)) {
                 $result = ['added' => null, 'scan_error' => null, 'background' => true];
             } else {
+                App::initConfig(Users::resolveConfig($createdLogin, $base));
                 $before = (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn();
                 $scanError = null;
                 set_time_limit(0);
@@ -139,9 +103,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
                 $result = ['added' => max(0, $after - $before), 'scan_error' => $scanError, 'background' => false];
             }
-        } else {
-            $errors[] = 'Impossible d\'écrire la configuration (config.local.php). '
-                . 'Vérifiez les droits d\'écriture du dossier.';
+        } catch (Throwable $throwable) {
+            $errors[] = $throwable->getMessage();
         }
     }
 }
@@ -154,10 +117,8 @@ foreach ($requirements as $check) {
     }
 }
 
-$formRoot = $errors !== [] ? $postMusicRoot : (is_string($musicRoot) ? $musicRoot : '');
-$formFfmpeg = $errors !== [] ? $postFfmpeg : $ffmpegDefault;
-$formTranscode = $errors !== [] ? (in_array($postTranscode, [0, 128, 192, 256, 320], true) ? $postTranscode : $transcodeDefault) : $transcodeDefault;
-$formUser = $errors !== [] ? $postUser : 'muzik';
+$formRoot = $errors !== [] ? $postMusicRoot : (is_string($base['music_root'] ?? null) ? $base['music_root'] : '');
+$formUser = $errors !== [] ? $postUser : '';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -187,8 +148,6 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
       padding:.6rem .7rem; border-radius:6px; border:1px solid #3a3a3a;
       background:#141414; color:#e8e8e8; font-size:1rem; }
     .hint { color:#9b9b9b; font-size:.9rem; margin:.3rem 0 0; }
-    select { padding:.6rem; border-radius:6px; border:1px solid #3a3a3a;
-             background:#141414; color:#e8e8e8; font-size:1rem; }
     .check { margin:.4rem 0; }
     button.primary { margin-top:1.5rem; padding:.8rem 1.4rem; font-size:1.05rem;
       background:#27d397; color:#082015; border:0; border-radius:8px;
@@ -199,7 +158,7 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
     .error { background:#3a1516; border:1px solid #e5484d; border-radius:8px;
              padding:1rem 1.25rem; margin-bottom:1.25rem; }
     .error ul { margin:0; padding-left:1.25rem; }
-.success { background:#15301f; border:1px solid #27d397; border-radius:8px;
+    .success { background:#15301f; border:1px solid #27d397; border-radius:8px;
              padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
     .details { font-size:.9rem; color:#a5a5a5; }
     footer { color:#6f6f6f; font-size:.85rem; text-align:center; margin-top:2rem; }
@@ -214,10 +173,11 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
     <section class="success">
       <h2>Installation terminée</h2>
 <?php if ($result['background']): ?>
-      <p>La configuration est enregistrée et l'indexation de votre bibliothèque
+      <p>Le compte est créé et l'indexation de votre bibliothèque
       est lancée en arrière-plan. Elle se poursuit pendant quelques minutes.</p>
       <p class="details">Vous pouvez suivre la progression dans
-      <code>data/scan-install.log</code>. L'interface va s'ouvrir automatiquement.</p>
+      <code>data/scan-<?= App::e($createdLogin ?? '') ?>.log</code>. L'interface
+      va s'ouvrir automatiquement.</p>
 <?php elseif ($result['scan_error'] !== null): ?>
       <p>
         La bibliothèque a été indexée
@@ -225,7 +185,7 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
       </p>
       <p class="details">
         Le scan s'est interrompu avant la fin : <?= App::e((string) $result['scan_error']) ?>.<br>
-        Vous pourrez terminer l'indexation avec <code>php bin/scan.php</code> depuis la ligne de commande.
+        Vous pourrez terminer l'indexation avec <code>php bin/scan.php --user login</code> depuis la ligne de commande.
       </p>
 <?php else: ?>
       <p>
@@ -264,7 +224,19 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
       </section>
 
       <section class="card">
-        <h2>2. Bibliothèque musicale</h2>
+        <h2>2. Compte utilisateur</h2>
+        <p class="hint">Chaque compte possède sa propre bibliothèque et son propre index.</p>
+        <label for="user">Identifiant</label>
+        <input type="text" id="user" name="user" required value="<?= App::e($formUser) ?>"
+               placeholder="ex : paul" autocomplete="username" pattern="[a-zA-Z0-9_-]+">
+        <label for="pass">Mot de passe</label>
+        <input type="password" id="pass" name="pass" required autocomplete="new-password" minlength="8">
+        <label for="pass2">Confirmer le mot de passe</label>
+        <input type="password" id="pass2" name="pass2" required autocomplete="new-password">
+      </section>
+
+      <section class="card">
+        <h2>3. Bibliothèque musicale</h2>
         <label for="music_root">Où sont vos fichiers de musique ?</label>
         <input type="text" id="music_root" name="music_root" required
                value="<?= App::e($formRoot) ?>" placeholder="/chemin/vers/ma/musique"
@@ -273,40 +245,12 @@ $formUser = $errors !== [] ? $postUser : 'muzik';
       </section>
 
       <section class="card">
-        <h2>3. Options</h2>
-        <label for="ffmpeg">FFmpeg (transcodage)</label>
-        <input type="text" id="ffmpeg" name="ffmpeg"
-               value="<?= App::e($formFfmpeg) ?>" placeholder="Aucun (lecture directe)">
-        <p class="hint">Laisser vide pour désactiver le transcodage. Nécessaire pour diffuser autre chose que du MP3 au débit choisi.</p>
-
-        <label for="transcode">Débit de transcodage</label>
-        <select id="transcode" name="transcode">
-<?php foreach ([0 => 'Lecture directe (aucun transcodage)', 128 => '128 kbit/s', 192 => '192 kbit/s', 256 => '256 kbit/s', 320 => '320 kbit/s'] as $value => $label): ?>
-          <option value="<?= $value ?>"<?= (int) $formTranscode === $value ? ' selected' : '' ?>><?= $label ?></option>
-<?php endforeach; ?>
-        </select>
-
-        <label for="auth_user">Utilisateur (optionnel, connexion de l'application)</label>
-        <input type="text" id="auth_user" name="auth_user"
-               value="<?= App::e($formUser) ?>" autocomplete="username">
-
-        <label for="auth_pass">Mot de passe</label>
-        <input type="password" id="auth_pass" name="auth_pass" autocomplete="new-password">
-        <label for="auth_pass2">Confirmer le mot de passe</label>
-        <input type="password" id="auth_pass2" name="auth_pass2" autocomplete="new-password">
-        <p class="hint">
-          Active la protection par mot de passe de l'application
-          (hachage bcrypt stocké dans <code>config.local.php</code>).
-          HTTPS recommandé avant exposition.
-        </p>
-      </section>
-
-      <section class="card">
         <h2>4. Installation et premier scan</h2>
         <p class="hint">
-          Configuration écrite dans <code>config.local.php</code>, puis indexation
-          incrémentale de la bibliothèque (aucune suppression). Pour une très
-          grande bibliothèque, lancez ensuite <code>php bin/scan.php</code> en CLI.
+          Le compte est enregistré dans <code>data/users.db</code>, puis une
+          indexation incrémentale de la bibliothèque est lancée (aucune
+          suppression). Pour une très grande bibliothèque, lancez ensuite
+          <code>php bin/scan.php --user votre_login</code> en CLI.
         </p>
         <button type="submit" class="primary" name="install"
                 <?= $hasFatalRequirement ? 'disabled' : '' ?>>Installer et scanner</button>

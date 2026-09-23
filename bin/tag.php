@@ -15,8 +15,9 @@ define('MUZIK_INCLUDE_ONLY', true);
 require __DIR__ . '/../src/DB.php';
 require __DIR__ . '/../src/App.php';
 require __DIR__ . '/fetch-art.php';
+require __DIR__ . '/lib/bootstrap.php';
 
-App::init(require __DIR__ . '/../config.php');
+App::initConfig(muzik_cli_config($argv));
 $pdo = App::pdo();
 
 ini_set('default_socket_timeout', '10');
@@ -170,7 +171,7 @@ echo "\nRésolution : $resolved albums / $total traités, $skipped sans genre (d
 echo 'Plan : ' . count($planOut) . " fichiers -> $planFile\n";
 
 if (!$apply) {
-    echo "DRY-RUN — aucun fichier ni base modifiés (lancez avec --apply pour écrire).\n";
+    echo "DRY-RUN — caches et plan écrits ($cacheFile, $planFile) ; aucun fichier audio ni base modifiés (lancez avec --apply pour écrire).\n";
     exit(0);
 }
 

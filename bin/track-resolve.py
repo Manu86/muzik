@@ -6,12 +6,13 @@ Les pistes sans numéro dans le fichier ET sans numéro en base sont laissées
 au repos (singles, compilations) : inventer un numéro n'aurait pas de sens.
 
 Usage :
-  python3 bin/track-resolve.py [--apply] [--samples N]
+  python3 bin/track-resolve.py [--apply] [--samples N] [--user LOGIN]
 """
 import argparse
 import json
 import re
 import sqlite3
+import sys
 
 from pathlib import Path
 
@@ -21,8 +22,10 @@ from mutagen.id3 import ID3
 from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'lib'))
+from muzik_db import catalog_db  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
-DB = ROOT / 'data' / 'muzik.db'
 PLAN = ROOT / 'data' / 'track-plan.json'
 
 
@@ -60,9 +63,11 @@ def main() -> None:
     parser.add_argument('--apply', action='store_true',
                         help='écrit songs.track en base')
     parser.add_argument('--samples', type=int, default=10)
+    parser.add_argument('--user', metavar='LOGIN',
+                        help='compte ciblé (défaut : data/muzik.db ou premier utilisateur)')
     args = parser.parse_args()
 
-    conn = sqlite3.connect(DB)
+    conn = sqlite3.connect(catalog_db())
     conn.row_factory = sqlite3.Row
     songs = conn.execute(
         'SELECT id, path, track, album_id, title FROM songs '

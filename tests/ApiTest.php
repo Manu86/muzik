@@ -240,7 +240,31 @@ final class ApiTest extends TestCase
     public function testGenresAndGenreDetails(): void
     {
         $genres = $this->captureJson(static fn() => Api::genres());
-        self::assertSame(['Jazz', 'Rock'], array_column($genres->data, 'genre'));
+        $expected = DB::GENRES;
+        sort($expected);
+        self::assertSame($expected, array_column($genres->data, 'genre'));
+        $byName = [];
+        foreach ($genres->data as $row) {
+            self::assertIsArray($row);
+            $name = $row['genre'];
+            self::assertIsString($name);
+            $byName[$name] = $row;
+        }
+        $rock = $byName['Rock'];
+        $rockAlbumCount = $rock['album_count'];
+        $rockSongCount = $rock['song_count'];
+        self::assertIsNumeric($rockAlbumCount);
+        self::assertIsNumeric($rockSongCount);
+        self::assertSame(1, (int) $rockAlbumCount);
+        self::assertSame(2, (int) $rockSongCount);
+        $jazz = $byName['Jazz'];
+        $jazzAlbumCount = $jazz['album_count'];
+        self::assertIsNumeric($jazzAlbumCount);
+        self::assertSame(1, (int) $jazzAlbumCount);
+        $electro = $byName['Electro'];
+        $electroAlbumCount = $electro['album_count'];
+        self::assertIsNumeric($electroAlbumCount);
+        self::assertSame(0, (int) $electroAlbumCount);
 
         $_GET = ['name' => 'Rock'];
         $rock = $this->captureJson(static fn() => Api::genre());
@@ -260,7 +284,7 @@ final class ApiTest extends TestCase
             self::assertArrayHasKey($section, $home->data);
             self::assertIsArray($home->data[$section]);
         }
-        self::assertCount(2, $home->data['genres']);
+        self::assertCount(count(DB::GENRES), $home->data['genres']);
         self::assertCount(2, $home->data['artists']);
         self::assertCount(2, $home->data['albums']);
         self::assertCount(1, $home->data['recent']);
@@ -278,6 +302,91 @@ final class ApiTest extends TestCase
         $updated = $this->captureJson(static fn() => Api::settings());
         self::assertSame(['ok' => true], $updated->data);
         self::assertSame('128', DB::setting('transcode'));
+    }
+
+    public function testSettingsExposeTheCurrentMusicRoot(): void
+    {
+        $settings = $this->captureJson(static fn() => Api::settings());
+        self::assertArrayHasKey('music_root', $settings->data);
+        self::assertSame(App::musicRoot(), $settings->data['music_root']);
+    }
+
+    public function testConfigRequiresAHostAuthentication(): void
+    {
+        $newRoot = $this->temporaryDirectory . '/nouvelle-musique';
+        mkdir($newRoot, 0777, true);
+        $_POST = ['music_root' => $newRoot];
+
+        $response = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        self::assertSame(401, $response->status);
+        self::assertSame(['error' => 'Unauthorized'], $response->data);
+    }
+
+    public function testConfigRefusesMissingOrUnreadableRoot(): void
+    {
+        $this->createAndLoginUser();
+
+        unset($_POST['music_root']);
+        $missing = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        self::assertSame(400, $missing->status);
+        self::assertSame(['error' => 'Indiquez le dossier contenant vos fichiers de musique.'], $missing->data);
+
+        $_POST = ['music_root' => $this->temporaryDirectory . '/absent'];
+        $unreadable = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        self::assertSame(400, $unreadable->status);
+        self::assertSame(['error' => 'Le dossier de musique doit exister et être lisible par le serveur.'], $unreadable->data);
+    }
+
+    public function testConfigUpdatesTheConnectedAccountAndReinitialises(): void
+    {
+        $this->createAndLoginUser();
+
+        $newRoot = $this->temporaryDirectory . '/nouvelle-musique';
+        mkdir($newRoot, 0777, true);
+        $_POST = ['music_root' => $newRoot];
+
+        $response = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        self::assertSame(200, $response->status);
+        self::assertArrayHasKey('ok', $response->data);
+        self::assertTrue($response->data['ok']);
+        self::assertSame($newRoot, $response->data['music_root']);
+        self::assertArrayHasKey('scan_started', $response->data);
+        self::assertSame($newRoot, App::musicRoot());
+
+        $profile = Users::profile('testuser');
+        self::assertIsArray($profile);
+        self::assertSame($newRoot, $profile['music_root']);
+        self::assertSame(Users::defaultDatabasePath('testuser'), $profile['db_path']);
+
+        self::assertFileDoesNotExist($this->temporaryDirectory . '/config.local.php');
+
+        $settings = $this->captureJson(static fn() => Api::settings());
+        self::assertSame($newRoot, $settings->data['music_root']);
+    }
+
+    public function testConfigStartsWithABackgroundScanWhenIdle(): void
+    {
+        if (!function_exists('proc_open')) {
+            $this->markTestSkipped('proc_open est désactivé.');
+        }
+
+        $this->createAndLoginUser();
+
+        mkdir($this->temporaryDirectory . '/bin', 0777, true);
+        file_put_contents($this->temporaryDirectory . '/bin/scan.php', "<?php\n");
+        mkdir($this->temporaryDirectory . '/data', 0777, true);
+
+        $newRoot = $this->temporaryDirectory . '/autre-musique';
+        mkdir($newRoot, 0777, true);
+        $_POST = ['music_root' => $newRoot];
+
+        $response = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        self::assertSame(200, $response->status);
+        self::assertTrue($response->data['scan_started']);
+        self::assertSame('1', DB::setting('scan_running'));
+
+        usleep(300000);
+        self::assertFileExists($this->temporaryDirectory . '/data/scan-testuser.log');
     }
 
     public function testScanRefusesWhenAlreadyRunning(): void

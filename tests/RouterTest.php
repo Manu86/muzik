@@ -81,15 +81,7 @@ final class RouterTest extends TestCase
 
     public function testProtectedRouteReturns401UntilLoginSetsASession(): void
     {
-        $hash = password_hash('S3cretP@ss', PASSWORD_BCRYPT);
-        App::init([
-            'music_root' => $this->temporaryDirectory . '/music',
-            'db_path' => $this->temporaryDirectory . '/muzik.sqlite',
-            'ffmpeg' => '/usr/bin/ffmpeg',
-            'transcode' => 0,
-            'auth_user' => 'testuser',
-            'auth_hash' => $hash,
-        ]);
+        Users::create('testuser', 'S3cretP@ss', $this->temporaryDirectory . '/music');
 
         $blocked = $this->captureJson(static fn() => Router::handle('/api/summary', 'GET'));
         self::assertSame(401, $blocked->status);
@@ -98,6 +90,7 @@ final class RouterTest extends TestCase
         $before = $this->captureJson(static fn() => Router::handle('/api/auth', 'GET'));
         self::assertSame(200, $before->status);
         self::assertFalse($before->data['authenticated']);
+        self::assertNull($before->data['user']);
 
         $_POST = ['user' => 'testuser', 'pass' => 'S3cretP@ss'];
         $login = $this->captureJson(static fn() => Router::handle('/api/login', 'POST'));
@@ -107,6 +100,7 @@ final class RouterTest extends TestCase
         $after = $this->captureJson(static fn() => Router::handle('/api/auth', 'GET'));
         self::assertSame(200, $after->status);
         self::assertTrue($after->data['authenticated']);
+        self::assertSame('testuser', $after->data['user']);
 
         $unlocked = $this->captureJson(static fn() => Router::handle('/api/summary', 'GET'));
         self::assertSame(200, $unlocked->status);
@@ -124,15 +118,7 @@ final class RouterTest extends TestCase
 
     public function testLoginRejectsWrongCredentials(): void
     {
-        $hash = password_hash('S3cretP@ss', PASSWORD_BCRYPT);
-        App::init([
-            'music_root' => $this->temporaryDirectory . '/music',
-            'db_path' => $this->temporaryDirectory . '/muzik.sqlite',
-            'ffmpeg' => '/usr/bin/ffmpeg',
-            'transcode' => 0,
-            'auth_user' => 'testuser',
-            'auth_hash' => $hash,
-        ]);
+        Users::create('testuser', 'S3cretP@ss', $this->temporaryDirectory . '/music');
 
         $_POST = ['user' => 'testuser', 'pass' => 'mauvais'];
         $response = $this->captureJson(static fn() => Router::handle('/api/login', 'POST'));
@@ -145,19 +131,7 @@ final class RouterTest extends TestCase
 
     public function testLoginWithRememberPersistsTheSession(): void
     {
-        $hash = password_hash('S3cretP@ss', PASSWORD_BCRYPT);
-        App::init([
-            'music_root' => $this->temporaryDirectory . '/music',
-            'db_path' => $this->temporaryDirectory . '/muzik.sqlite',
-            'ffmpeg' => '/usr/bin/ffmpeg',
-            'transcode' => 0,
-            'auth_user' => 'testuser',
-            'auth_hash' => $hash,
-        ]);
-
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            session_destroy();
-        }
+        Users::create('testuser', 'S3cretP@ss', $this->temporaryDirectory . '/music');
 
         $_POST = ['user' => 'testuser', 'pass' => 'S3cretP@ss', 'remember' => '1'];
         $login = $this->captureJson(static fn() => Router::handle('/api/login', 'POST'));
@@ -166,5 +140,29 @@ final class RouterTest extends TestCase
 
         $_POST = [];
         Auth::logout();
+    }
+
+    public function testAuthReportsTheCurrentLoginWhenAlreadyConnected(): void
+    {
+        $this->createAndLoginUser();
+
+        $auth = $this->captureJson(static fn() => Router::handle('/api/auth', 'GET'));
+        self::assertSame(200, $auth->status);
+        self::assertTrue($auth->data['authenticated']);
+        self::assertSame('testuser', $auth->data['user']);
+    }
+
+    public function testDestroyingTheAccountInvalidatesTheSession(): void
+    {
+        $this->createAndLoginUser('emmanuel');
+        Users::create('secretary', 'S3cretP@ss', $this->temporaryDirectory . '/music');
+
+        $blocked = $this->captureJson(static fn() => Router::handle('/api/summary', 'GET'));
+        self::assertSame(200, $blocked->status);
+
+        Users::delete('emmanuel');
+
+        $locked = $this->captureJson(static fn() => Router::handle('/api/summary', 'GET'));
+        self::assertSame(401, $locked->status);
     }
 }

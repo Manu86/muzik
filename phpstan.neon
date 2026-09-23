@@ -13,6 +13,7 @@ parameters:
         - bin/album-resolve.php
         - bin/album-edit.php
         - bin/fetch-artist-art.php
+        - bin/lib/bootstrap.php
     tmpDir: /tmp/muzik-phpstan
     treatPhpDocTypesAsCertain: false
     parallel:

@@ -1,9 +1,9 @@
-const CACHE = 'muzik-v70';
+const CACHE = 'muzik-v73';
 const SHELL = [
   './',
   'manifest.json?v=3',
-  'assets/app.css?v=54',
-  'assets/app.js?v=65',
+  'assets/app.css?v=57',
+  'assets/app.js?v=70',
   'assets/icon-192.png?v=3',
   'assets/icon-512.png?v=3',
 ];

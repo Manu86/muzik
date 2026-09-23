@@ -13,7 +13,8 @@ if (defined('MUZIK_INCLUDE_ONLY')) {
 } else {
     require __DIR__ . '/../src/DB.php';
     require __DIR__ . '/../src/App.php';
-    App::init(require __DIR__ . '/../config.php');
+    require __DIR__ . '/lib/bootstrap.php';
+    App::initConfig(muzik_cli_config($argv));
     $pdo = App::pdo();
 
     ini_set('default_socket_timeout', '10');

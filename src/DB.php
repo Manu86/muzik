@@ -45,6 +45,31 @@ final class DatabaseConnection extends PDO
 
 final class DB
 {
+    /**
+     * Genres canoniques pré-créés pour chaque nouveau catalogue. Ce sont les
+     * libellés vers lesquels App::normalizeGenre() fusionne les écritures
+     * (variantes, orthographes) ; ils sont complétés par les genres réellement
+     * lus dans les tags lors de l'indexation.
+     *
+     * @var list<string>
+     */
+    public const GENRES = [
+        'Alternative',
+        'Chanson française',
+        'Classique',
+        'Electro',
+        'Films/Jeux vidéo',
+        'Humour / Parlé',
+        'Jazz',
+        'Latino',
+        'Musiques du monde',
+        'Pop',
+        'R&B',
+        'Rap/Hip Hop',
+        'Reggae',
+        'Rock',
+    ];
+
     private static ?DatabaseConnection $pdo = null;
     private static string $path = '';
 
@@ -111,6 +136,9 @@ final class DB
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
+            CREATE TABLE IF NOT EXISTS genres (
+                name TEXT PRIMARY KEY
+            );
         ");
         $cols = $pdo->query('PRAGMA table_info(songs)')->fetchAll(PDO::FETCH_COLUMN, 1);
         if (!in_array('play_count', $cols, true)) {
@@ -126,6 +154,12 @@ final class DB
         $pdo->exec('
             CREATE INDEX IF NOT EXISTS idx_songs_play_count ON songs(play_count);
         ');
+        if ((int) $pdo->query('SELECT COUNT(*) FROM albums')->fetchColumn() === 0) {
+            $seed = $pdo->prepare('INSERT OR IGNORE INTO genres(name) VALUES (?)');
+            foreach (self::GENRES as $genre) {
+                $seed->execute([$genre]);
+            }
+        }
     }
 
     public static function setting(string $key, ?string $default = null): ?string
