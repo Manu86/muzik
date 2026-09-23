@@ -1,7 +1,7 @@
 'use strict';
 
-import { $, $$, api, state, esc, fmtDur, a11yRow } from './core.js?v=77';
-import { getFavIds, toggleFav } from './favorites.js?v=77';
+import { $, $$, api, state, esc, fmtDur, a11yRow } from './core.js?v=84';
+import { getFavIds, toggleFav } from './favorites.js?v=84';
 
 export const audio = new Audio();
 audio.preload = 'auto';
@@ -52,9 +52,15 @@ function clearTransitionHold() {
 }
 Object.defineProperty(state, 'playingId', { get: () => playingId, set: v => { playingId = v; } });
 
-function toEntry(x) {
+export function toEntry(x) {
   if (x && typeof x === 'object') {
-    return { id: x.id, title: x.title || '', artist: x.artist || '', duration: x.duration || '', album: x.album || '' };
+    return {
+      id: x.id,
+      title: x.title || '',
+      artist: x.artist || x.artist_name || '',
+      duration: x.duration || '',
+      album: x.album || x.album_id || '',
+    };
   }
   const row = document.querySelector(`#content .track-row[data-id="${x}"], #content .art-row[data-id="${x}"]`);
   return {
@@ -64,6 +70,27 @@ function toEntry(x) {
     duration: row ? (row.dataset.duration || '') : '',
     album: row ? (row.dataset.album || '') : '',
   };
+}
+
+export function addToQueue(x) {
+  const entry = toEntry(x);
+  if (state.queue.some(item => String(item.id) === String(entry.id))) return false;
+  const wasEmpty = state.queue.length === 0;
+  state.queue.push(entry);
+  if (wasEmpty) state.index = 0;
+  return true;
+}
+
+export function playTrack(x) {
+  const entry = toEntry(x);
+  const queuedIndex = state.queue.findIndex(item => String(item.id) === String(entry.id));
+  if (queuedIndex === -1) {
+    state.queue.push(entry);
+    state.index = state.queue.length - 1;
+  } else {
+    state.index = queuedIndex;
+  }
+  play();
 }
 
 export function playQueue(ids, start = 0) {
@@ -76,7 +103,13 @@ export function playQueue(ids, start = 0) {
 export function syncPlayBtn() {
   const empty = !state.queue.length;
   const btn = $('#btn-play');
+  const progress = $('#player-progress');
   btn.disabled = empty;
+  progress.disabled = !state.playingId;
+  if (progress.disabled) {
+    progress.value = 0;
+    $('#player-time').textContent = '0:00';
+  }
   if (empty) setPlayBtn(false);
 }
 
@@ -85,6 +118,7 @@ export async function renderQueue() {
   const clear = $('#queue-clear');
   clear.style.display = state.queue.length ? '' : 'none';
   list.innerHTML = '';
+  syncPlayBtn();
   if (!state.queue.length) {
     list.innerHTML = '<div class="empty">File d\'attente vide.<br>Joue une piste pour la remplir.</div>';
     syncQueueInset();
@@ -123,7 +157,6 @@ export async function renderQueue() {
     frag.appendChild(row);
   });
   list.appendChild(frag);
-  syncPlayBtn();
   syncQueueInset();
 }
 
@@ -191,6 +224,7 @@ export function play() {
   if (!entry) return;
   const id = String(entry.id);
   state.playingId = id;
+  syncPlayBtn();
   setPlayBtn(true);
   const blob = cachedAudioUrl(id);
   const url = blob ? blob.url : audioUrl(id);

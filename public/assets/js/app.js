@@ -1,8 +1,8 @@
 'use strict';
 
-import { bootAuth, loadSettings, loadSettingsView } from './account.js?v=77';
-import { configureSettingsView, handleRoute } from './views.js?v=77';
-import { syncPlayBtn } from './player.js?v=77';
+import { bootAuth, loadSettings, loadSettingsView } from './account.js?v=84';
+import { configureSettingsView, handleRoute } from './views.js?v=84';
+import { syncPlayBtn } from './player.js?v=84';
 
 configureSettingsView(loadSettingsView);
 

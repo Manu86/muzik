@@ -1,6 +1,6 @@
 'use strict';
 
-import { api, state } from './core.js?v=77';
+import { api, state } from './core.js?v=84';
 
 let favoriteIds = new Set();
 let onFavoritesChanged = () => {};

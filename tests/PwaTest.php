@@ -41,7 +41,7 @@ final class PwaTest extends TestCase
         $html = file_get_contents($public . '/app.html');
         $javascript = $this->javascriptSources();
         self::assertNotFalse($html);
-        self::assertStringContainsString('<script type="module" src="assets/js/app.js?v=77"></script>', $html);
+        self::assertStringContainsString('<script type="module" src="assets/js/app.js?v=84"></script>', $html);
 
         preg_match_all('/data-view="([a-z-]+)"/', $html, $matches);
         $views = array_values(array_unique(array_filter(
@@ -104,6 +104,73 @@ final class PwaTest extends TestCase
         self::assertStringContainsString("searchInput.value = '';", $javascript);
         self::assertStringContainsString('searchClose.hidden = q.length === 0;', $javascript);
         self::assertStringContainsString('#search-close[hidden] { display: none; }', $stylesheet);
+    }
+
+    public function testTrackQueueButtonsCanBuildPlayerEntries(): void
+    {
+        $javascript = dirname(__DIR__) . '/public/assets/js';
+        $player = file_get_contents($javascript . '/player.js');
+        $views = file_get_contents($javascript . '/views.js');
+        self::assertNotFalse($player);
+        self::assertNotFalse($views);
+
+        self::assertStringContainsString('export function toEntry(x)', $player);
+        self::assertMatchesRegularExpression(
+            "/import \{[^}]*\\btoEntry\\b[^}]*\} from '\\.\/player\\.js\?v=84';/",
+            $views,
+        );
+        self::assertStringContainsString('export function addToQueue(x)', $player);
+        self::assertStringContainsString(
+            'state.queue.some(item => String(item.id) === String(entry.id))',
+            $player,
+        );
+        self::assertStringContainsString("artist: x.artist || x.artist_name || ''", $player);
+        self::assertStringContainsString("album: x.album || x.album_id || ''", $player);
+        self::assertStringContainsString('data-album="${t.album || \'\'}"', $views);
+        self::assertGreaterThanOrEqual(2, substr_count($views, 'addToQueue(row.dataset);'));
+    }
+
+    public function testProgressSliderIsGreyAndDisabledWithoutALoadedTrack(): void
+    {
+        $public = dirname(__DIR__) . '/public';
+        $html = file_get_contents($public . '/app.html');
+        $player = file_get_contents($public . '/assets/js/player.js');
+        $stylesheet = file_get_contents($public . '/assets/css/app.css');
+        self::assertNotFalse($html);
+        self::assertNotFalse($player);
+        self::assertNotFalse($stylesheet);
+
+        self::assertStringContainsString(
+            'id="player-progress" type="range" min="0" value="0" step="1" aria-label="Position de lecture" disabled',
+            $html,
+        );
+        self::assertStringContainsString('progress.disabled = !state.playingId;', $player);
+        self::assertStringContainsString('#player-progress:disabled { accent-color: var(--muted);', $stylesheet);
+    }
+
+    public function testClickingATrackPreservesTheQueueAndStartsTheSelectedTrack(): void
+    {
+        $javascript = dirname(__DIR__) . '/public/assets/js';
+        $views = file_get_contents($javascript . '/views.js');
+        $player = file_get_contents($javascript . '/player.js');
+        self::assertNotFalse($views);
+        self::assertNotFalse($player);
+
+        self::assertGreaterThanOrEqual(4, substr_count($views, 'playTrack('));
+        self::assertStringNotContainsString("const ids = $$('.track-row', container)", $views);
+        self::assertStringContainsString('export function playTrack(x)', $player);
+        self::assertStringContainsString(
+            'const queuedIndex = state.queue.findIndex(item => String(item.id) === String(entry.id));',
+            $player,
+        );
+        self::assertStringContainsString('state.queue.push(entry);', $player);
+        self::assertStringContainsString('state.index = queuedIndex;', $player);
+        self::assertStringContainsString(
+            "$('#rand-playall').addEventListener('click', () => playQueue(allRandIds(), 0))",
+            $views,
+        );
+        self::assertStringNotContainsString('randPlay(', $views);
+        self::assertStringContainsString("$('#play-all').addEventListener('click'", $views);
     }
 
     public function testSongListsShowThePlayingIndicatorOverTheArtworkWithoutNumbers(): void

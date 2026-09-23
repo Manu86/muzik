@@ -292,6 +292,7 @@ body {
 #player-controls button:disabled { opacity: .4; cursor: default; }
 #btn-play { background: var(--accent); color: #082015; border-color: var(--accent); }
 #player-progress { width: 200px; accent-color: var(--accent); }
+#player-progress:disabled { accent-color: var(--muted); filter: grayscale(1); cursor: default; }
 #player-time { font-size: 12px; color: var(--muted); min-width: 38px; text-align: center; }
 #player-transcode {
   background: var(--bg-3); color: var(--text); border: 1px solid var(--border);

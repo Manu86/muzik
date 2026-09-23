@@ -1,8 +1,8 @@
 'use strict';
 
-import { $, api, state, pictoIcon } from './core.js?v=77';
-import { handleRoute, switchView } from './views.js?v=77';
-import { syncPlayBtn } from './player.js?v=77';
+import { $, api, state, pictoIcon } from './core.js?v=84';
+import { handleRoute, switchView } from './views.js?v=84';
+import { syncPlayBtn } from './player.js?v=84';
 
 /* ============================================================ */
 /*  AUTHENTIFICATION PAR L'APPLICATION                          */

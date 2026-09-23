@@ -1,8 +1,8 @@
 'use strict';
 
-import { $, $$, api, state, esc, pictoIcon, fmtDur, qs, a11yCard, a11yRow } from './core.js?v=77';
-import { configureFavorites, getFavIds, toggleFav } from './favorites.js?v=77';
-import { audio, clearPlaybackRetries, mediaSessionUpdate, numberRows, openQueue, play, playQueue, refreshSongInfo, renderQueue, setPlayBtn, togglePlayback, toggleQueue } from './player.js?v=77';
+import { $, $$, api, state, esc, pictoIcon, fmtDur, qs, a11yCard, a11yRow } from './core.js?v=84';
+import { configureFavorites, getFavIds, toggleFav } from './favorites.js?v=84';
+import { addToQueue, audio, clearPlaybackRetries, mediaSessionUpdate, numberRows, openQueue, play, playQueue, playTrack, refreshSongInfo, renderQueue, setPlayBtn, toEntry, togglePlayback, toggleQueue } from './player.js?v=84';
 
 /* ------------------------------------------------------------------ */
 /*  Navigation                                                         */
@@ -416,7 +416,7 @@ async function loadHome() {
   });
   $$('.cover-tile', el).forEach(t => {
     t.addEventListener('click', () => {
-      playQueue([{ id: t.dataset.id, title: t.dataset.title, artist: t.dataset.artist, duration: '', album: t.dataset.album }], 0);
+      playTrack(t.dataset);
     });
   });
   bindTrackClick(el);
@@ -685,7 +685,7 @@ function thumbHtml(albumId) {
 function renderTrack(t, favIds) {
   const on = favIds.has(String(t.id)) ? ' on' : '';
   return `
-    <div class="track-row" data-id="${t.id}" data-title="${esc(t.title)}" data-artist="${esc(t.artist)}" data-duration="${t.duration || ''}">
+    <div class="track-row" data-id="${t.id}" data-title="${esc(t.title)}" data-artist="${esc(t.artist)}" data-duration="${t.duration || ''}" data-album="${t.album || ''}">
       ${thumbHtml(t.album)}
       <span class="ti">${esc(t.title)}<span class="t-artist">${esc(t.artist)}</span></span>
       <span class="du">${fmtDur(t.duration)}</span>
@@ -707,8 +707,7 @@ function bindTrackClick(container) {
         togglePlayback();
         return;
       }
-      const ids = $$('.track-row', container).map(r => r.dataset.id);
-      playQueue(ids, ids.indexOf(row.dataset.id));
+      playTrack(row.dataset);
     });
   });
   container.querySelectorAll('[data-fav]').forEach(btn => {
@@ -722,9 +721,7 @@ function bindTrackClick(container) {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const row = btn.closest('.track-row');
-      const wasEmpty = state.queue.length === 0;
-      state.queue.push(toEntry(row.dataset.id));
-      if (wasEmpty) state.index = 0;
+      addToQueue(row.dataset);
       openQueue();
       btn.classList.add('pulse');
       setTimeout(() => btn.classList.remove('pulse'), 300);
@@ -772,18 +769,13 @@ async function loadRandom() {
     <div class="track-list" id="rand-list"></div>
     <div class="end-note" id="rand-end"></div>`;
   $('#rand-again').addEventListener('click', loadRandom);
-  $('#rand-playall').addEventListener('click', () => randPlay(0));
+  $('#rand-playall').addEventListener('click', () => playQueue(allRandIds(), 0));
   $('#content').scrollTop = 0;
   loadRandMore();
 }
 
 function allRandIds() {
   return $$('#rand-list .art-row').map(r => r.dataset.id);
-}
-
-function randPlay(index) {
-  const ids = allRandIds();
-  playQueue(ids, index);
 }
 
 async function loadRandMore() {
@@ -797,7 +789,6 @@ async function loadRandMore() {
   ]);
   const list = $('#rand-list');
   songs.forEach(s => {
-    const idx = list.children.length;
     const row = document.createElement('div');
     row.className = 'art-row';
     row.dataset.id = s.id;
@@ -825,9 +816,7 @@ async function loadRandMore() {
     });
     row.querySelector('[data-addq]').addEventListener('click', e => {
       e.stopPropagation();
-      const wasEmpty = state.queue.length === 0;
-      state.queue.push(toEntry(s));
-      if (wasEmpty) state.index = 0;
+      addToQueue(row.dataset);
       openQueue();
       e.currentTarget.classList.add('pulse');
       setTimeout(() => e.currentTarget.classList.remove('pulse'), 300);
@@ -837,7 +826,7 @@ async function loadRandMore() {
         togglePlayback();
         return;
       }
-      randPlay(idx);
+      playTrack(row.dataset);
     });
     list.appendChild(row);
   });
@@ -1007,7 +996,7 @@ async function doSearch(q) {
       if (type === 'artist') openArtist(item.dataset.id, 'artists');
       else if (type === 'album') openAlbum(item.dataset.id, state.view);
       else {
-        playQueue([{ id: item.dataset.id, title: item.dataset.title, artist: item.dataset.artist, duration: '', album: item.dataset.album || '' }], 0);
+        playTrack(item.dataset);
       }
     });
   });
