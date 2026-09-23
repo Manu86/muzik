@@ -373,7 +373,9 @@ button.back { background: none; border: none; padding: 0; font: inherit; }
 }
 #art-lightbox[hidden] { display: none; }
 #art-lightbox img {
-  max-width: min(92vw, 900px); max-height: 92vh;
+  width: min(80vw, 640px); aspect-ratio: 1;
+  max-height: calc(100vh - 120px);
+  object-fit: cover; object-position: center;
   border-radius: 10px; box-shadow: 0 10px 50px rgba(0, 0, 0, .6);
   background: var(--bg-2);
 }
