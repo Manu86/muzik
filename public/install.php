@@ -32,11 +32,6 @@ if (!is_file(__DIR__ . '/../vendor/autoload.php') || !is_dir(__DIR__ . '/../vend
 }
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/DB.php';
-require __DIR__ . '/../src/App.php';
-require __DIR__ . '/../src/Users.php';
-require __DIR__ . '/../src/Installer.php';
-require __DIR__ . '/../src/Scanner.php';
 
 $base = require __DIR__ . '/../config.php';
 $projectRoot = dirname(__DIR__);

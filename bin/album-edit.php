@@ -16,8 +16,6 @@ if (!defined('MUZIK_INCLUDE_ONLY')) {
     define('MUZIK_INCLUDE_ONLY', true);
 }
 
-require_once __DIR__ . '/../src/DB.php';
-require_once __DIR__ . '/../src/App.php';
 require_once __DIR__ . '/lib/bootstrap.php';
 
 if (defined('MUZIK_ALBUM_EDIT_INCLUDE_ONLY')) {

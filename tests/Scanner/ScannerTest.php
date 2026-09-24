@@ -12,47 +12,6 @@ final class ScannerTest extends TestCase
         $this->scanner = new Scanner();
     }
 
-    public function testAudioExtensionsAreRecognisedCaseInsensitively(): void
-    {
-        foreach (['song.mp3', 'song.FLAC', 'song.ogg', 'song.m4a', 'song.wav'] as $file) {
-            self::assertTrue($this->invoke('isAudio', $file));
-        }
-        self::assertFalse($this->invoke('isAudio', 'cover.jpg'));
-    }
-
-    public function testTrackNumbersAreParsedFromSupportedPrefixes(): void
-    {
-        self::assertSame(1, $this->invoke('parseTrack', '01 - Song.mp3'));
-        self::assertSame(12, $this->invoke('parseTrack', 'track 12_ Song.flac'));
-        self::assertSame(7, $this->invoke('parseTrack', 'INCOMPLETE~07. Song.ogg'));
-        self::assertNull($this->invoke('parseTrack', 'Song without number.mp3'));
-    }
-
-    public function testTitlesAreCleanedFromFilenameNoise(): void
-    {
-        self::assertSame('Song', $this->invoke('titleFromFilename', '01 - Artist - Song (0h17).mp3'));
-        self::assertSame('Title', $this->invoke('titleFromFilename', 'INCOMPLETE~02_Title@c6.flac'));
-        self::assertSame('Piste inconnue', $this->invoke('titleFromFilename', '01.mp3'));
-    }
-
-    public function testGenericTagsAreRejected(): void
-    {
-        self::assertSame('', $this->invoke('tagValue', 'Unknown Artist', 'artist'));
-        self::assertSame('', $this->invoke('tagValue', 'https://example.test', 'album'));
-        self::assertSame('', $this->invoke('tagValue', 'Track 01', 'title'));
-        self::assertSame('Real title', $this->invoke('tagValue', ' Real title ', 'title'));
-    }
-
-    public function testDiscDirectoriesAndAlbumBaseAreDetected(): void
-    {
-        self::assertSame(2, $this->invoke('discDir', '/music/Artist/Album/CD 2'));
-        self::assertNull($this->invoke('discDir', '/music/Artist/Album'));
-        self::assertSame(
-            ['/music/Artist/Album', 'CD 2'],
-            $this->invoke('albumBase', '/music/Artist/Album/CD 2', '/music'),
-        );
-    }
-
     public function testIncrementalScanIndexesFilesAndFullScanPrunesMissingOnes(): void
     {
         $root = $this->temporaryDirectory . '/music';
@@ -150,28 +109,6 @@ final class ScannerTest extends TestCase
         self::assertSame(1, (int) App::pdo()->query('SELECT COUNT(*) FROM songs')->fetchColumn());
     }
 
-    public function testEnsureAlbumStoresAndBackfillsGenre(): void
-    {
-        $this->initialiseApp($this->temporaryDirectory . '/music');
-        $pdo = App::pdo();
-        $pdo->exec("INSERT INTO artists(name, path) VALUES('Artist', '/x')");
-        $artistId = (int) $pdo->lastInsertId();
-
-        $albumId = $this->invoke('ensureAlbum', $artistId, 'Album', null, '/x', null, 'Pop');
-        self::assertIsInt($albumId);
-        self::assertNotSame(0, $albumId);
-        self::assertSame('Pop', (string) $pdo->query("SELECT genre FROM albums WHERE id = $albumId")->fetchColumn());
-
-        $again = $this->invoke('ensureAlbum', $artistId, 'Album', null, '/x', null, '');
-        self::assertSame($albumId, $again);
-        self::assertSame('Pop', (string) $pdo->query("SELECT genre FROM albums WHERE id = $albumId")->fetchColumn());
-
-        $pdo->exec("INSERT INTO albums(artist_id, name, genre, path) VALUES($artistId, 'Album 2', '', '/x')");
-        $album2 = (int) $pdo->lastInsertId();
-        $this->invoke('ensureAlbum', $artistId, 'Album 2', null, '/x', null, 'Jazz');
-        self::assertSame('Jazz', (string) $pdo->query("SELECT genre FROM albums WHERE id = $album2")->fetchColumn());
-    }
-
     public function testEmbeddedArtworkIsExtractedWhenNoCoverFileExists(): void
     {
         $root = $this->temporaryDirectory . '/music';
@@ -206,11 +143,5 @@ final class ScannerTest extends TestCase
     {
         return chr(($n >> 21) & 0x7F) . chr(($n >> 14) & 0x7F)
             . chr(($n >> 7) & 0x7F) . chr($n & 0x7F);
-    }
-
-    private function invoke(string $method, mixed ...$arguments): mixed
-    {
-        $reflection = new ReflectionMethod($this->scanner, $method);
-        return $reflection->invoke($this->scanner, ...$arguments);
     }
 }

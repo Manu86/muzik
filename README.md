@@ -183,7 +183,8 @@ configuration et lance une indexation de cet utilisateur. Le même écran
 relance un rescannage complet en arrière-plan (équivalent d’un
 `bin/scan.php --full` : les pistes dont le fichier a disparu du disque sont
 retirées de la base) ; son état (en cours ou dernière exécution) est affiché
-en temps réel et visible via l’API `POST /api/scan`.
+en temps réel. `POST /api/scan` lance l’analyse et `GET /api/settings` expose
+son état (`scan_running`, `scan_started_at`, `scan_last_run`).
 
 Titre, artiste, album, année et genre sont lus dans les tags ID3 des fichiers
 MP3 (id3v2, repli id3v1). Le genre est normalisé dans une liste canonique
@@ -309,6 +310,8 @@ et PHP 8.4.
 
 ```text
 public/index.php        point d’entrée HTTP et fichiers statiques
+public/app.html         structure de la SPA servie à la racine
+public/assets/css/app.css styles de l’interface
 public/assets/js/app.js point d’entrée de l’interface JavaScript
 public/assets/js/core.js état partagé, API et utilitaires du navigateur
 public/assets/js/favorites.js état et actions des favoris
@@ -319,17 +322,32 @@ public/install.php      page d’installation au premier lancement
 config.php              charge la configuration publique puis locale
 config/app.php          valeurs portables versionnées
 config.local.php        valeurs globales propres à la machine, ignorées par Git
-src/Router.php          routage HTTP
-src/Api.php             API du catalogue et de la lecture
-src/Users.php           comptes utilisateurs (data/users.db) et bases par compte
-src/Auth.php            authentification par session
-src/Installer.php       contrôle des prérequis et création du premier compte
-src/Streamer.php        streaming direct et transcodage
-src/DB.php              connexion, schéma et migrations SQLite
-src/Scanner.php         indexation de la bibliothèque
+src/Router/Router.php   routage HTTP vers [Contrôleur, méthode]
+src/Http/Request.php    lecture du corps et des paramètres de requête
+src/Http/Controllers/   contrôleurs HTTP (catalogue, lecture, favoris, réglages, média, compte)
+src/Repo/Catalogue.php  requêtes de lecture partagées du catalogue
+src/Repo/Statistics.php classements (top, récents)
+src/Repo/Favorites.php  favoris d’un compte
+src/Repo/Genres.php     synthèse des genres
+src/Auth/Auth.php       authentification par session
+src/Auth/Users.php      comptes utilisateurs (data/users.db) et bases par compte
+src/Auth/Installer.php  contrôle des prérequis et création du premier compte
+src/Streaming/Streamer.php streaming direct et transcodage
+src/Database/DB.php     connexion, schéma et migrations SQLite
+src/Database/DatabaseConnection.php enveloppe PDO (connexion, transactions)
+src/Database/DatabaseStatement.php  enveloppe PDOStatement (fetchall, sqliteValue)
+src/Config/App.php      configuration globale et réponses JSON
+src/Domain/Genre.php    normalisation et liste canonique des genres
+src/Scanner/Scanner.php indexation de la bibliothèque (orchestration)
+src/Scanner/TreeWalker.php parcours de l’arborescence musicale
+src/Scanner/TagReader.php lecture getID3, cache de lecture et replis
+src/Scanner/FilenameParser.php heuristiques de nommage (piste, disque, titre)
+src/Scanner/ArtExtractor.php jaquettes (fichiers nommés, pochettes embarquées)
+src/Scanner/CatalogWriter.php création artistes/albums, upserts, pruning
+src/Scanner/BackgroundScan.php scan détaché (bin/scan.php en arrière-plan)
 bin/                    commandes d’administration (dont bin/users.php)
 data/                   bases (users.db, muzik.db, <login>.db), pochettes extraites (art/), caches, journaux
-tests/                  tests PHPUnit
+tests/                  tests PHPUnit (sous-répertoires miroirs de src/)
 ```
 
 Le schéma SQLite contient six tables principales : `artists`, `albums`, `songs`, `favorites`, `settings` et `genres`. Les suppressions d’artistes et d’albums sont propagées par clés étrangères. Les jaquettes d’albums et d’artistes sont référencées par `art_path` (fichier image ou pochette extraite de `data/art/`).

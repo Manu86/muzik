@@ -1,75 +1,9 @@
 <?php
 
-final class DatabaseStatement extends PDOStatement
-{
-    /** @return array<mixed, mixed>|false */
-    public function fetch(
-        int $mode = PDO::FETCH_DEFAULT,
-        int $cursorOrientation = PDO::FETCH_ORI_NEXT,
-        int $cursorOffset = 0
-    ): array|false {
-        $row = parent::fetch($mode, $cursorOrientation, $cursorOffset);
-        if ($row === false || is_array($row)) {
-            return $row;
-        }
-
-        throw new RuntimeException('The SQL row is not an associative array.');
-    }
-}
-
-final class DatabaseConnection extends PDO
-{
-    /** @param array<int|string, mixed> $options */
-    public function prepare(string $query, array $options = []): DatabaseStatement
-    {
-        $statement = parent::prepare($query, $options);
-        if (!$statement instanceof DatabaseStatement) {
-            throw new RuntimeException('Unable to prepare the SQL statement.');
-        }
-
-        return $statement;
-    }
-
-    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): DatabaseStatement
-    {
-        $statement = $fetchMode === null
-            ? parent::query($query)
-            : parent::query($query, $fetchMode, ...$fetchModeArgs);
-        if (!$statement instanceof DatabaseStatement) {
-            throw new RuntimeException('Unable to execute the SQL query.');
-        }
-
-        return $statement;
-    }
-}
+declare(strict_types=1);
 
 final class DB
 {
-    /**
-     * Genres canoniques pré-créés pour chaque nouveau catalogue. Ce sont les
-     * libellés vers lesquels App::normalizeGenre() fusionne les écritures
-     * (variantes, orthographes) ; ils sont complétés par les genres réellement
-     * lus dans les tags lors de l'indexation.
-     *
-     * @var list<string>
-     */
-    public const GENRES = [
-        'Alternative',
-        'Chanson française',
-        'Classique',
-        'Electro',
-        'Films/Jeux vidéo',
-        'Humour / Parlé',
-        'Jazz',
-        'Latino',
-        'Musiques du monde',
-        'Pop',
-        'R&B',
-        'Rap/Hip Hop',
-        'Reggae',
-        'Rock',
-    ];
-
     private static ?DatabaseConnection $pdo = null;
     private static string $path = '';
 
@@ -145,14 +79,14 @@ final class DB
                 name TEXT PRIMARY KEY
             );
         ");
-        $cols = $pdo->query('PRAGMA table_info(songs)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        $cols = $pdo->query('PRAGMA table_info(songs)')->fetchColumnValues(1);
         if (!in_array('play_count', $cols, true)) {
             $pdo->exec('ALTER TABLE songs ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0');
         }
         if (!in_array('last_played', $cols, true)) {
             $pdo->exec('ALTER TABLE songs ADD COLUMN last_played TEXT');
         }
-        $albumCols = $pdo->query('PRAGMA table_info(albums)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        $albumCols = $pdo->query('PRAGMA table_info(albums)')->fetchColumnValues(1);
         if (!in_array('genre', $albumCols, true)) {
             $pdo->exec('ALTER TABLE albums ADD COLUMN genre TEXT');
         }
@@ -161,7 +95,7 @@ final class DB
         ');
         if ((int) $pdo->query('SELECT COUNT(*) FROM albums')->fetchColumn() === 0) {
             $seed = $pdo->prepare('INSERT OR IGNORE INTO genres(name) VALUES (?)');
-            foreach (self::GENRES as $genre) {
+            foreach (Genre::GENRES as $genre) {
                 $seed->execute([$genre]);
             }
         }

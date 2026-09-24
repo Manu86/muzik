@@ -112,9 +112,9 @@ final class UsersTest extends TestCase
 
         $catalogue = DB::init(Users::defaultDatabasePath('marie'));
         DB::schema();
-        $genres = $catalogue->query('SELECT name FROM genres ORDER BY name')->fetchAll(PDO::FETCH_COLUMN);
+        $genres = $catalogue->query('SELECT name FROM genres ORDER BY name')->fetchColumnValues();
 
-        self::assertSame(DB::GENRES, $genres);
+        self::assertSame(Genre::GENRES, $genres);
         self::assertNotSame('', implode('', $genres));
     }
 
@@ -124,8 +124,8 @@ final class UsersTest extends TestCase
         Users::create('marie', 'S3cretP@ss', '/tmp/musique-marie');
         App::initConfig(Users::resolveConfig('marie', Users::baseConfig()));
 
-        $rows = $this->captureJson(static fn() => Api::genres())->data;
-        $expected = DB::GENRES;
+        $rows = $this->captureJson(static fn() => CatalogController::genres())->data;
+        $expected = Genre::GENRES;
         sort($expected);
 
         self::assertSame($expected, array_column($rows, 'genre'));

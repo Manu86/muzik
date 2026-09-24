@@ -11,17 +11,26 @@ Avant une modification, lire au minimum `README.md`, `composer.json` et les fich
 ## Carte du code
 
 - `public/index.php` initialise l’application, sert les fichiers statiques et délègue au routeur.
-- `src/App.php` contient la configuration globale, le PDO et les réponses JSON.
-- `src/Users.php` gère les comptes (base méta `data/users.db`), leurs racines
+- `src/Config/App.php` contient la configuration globale, le PDO et les réponses JSON.
+- `src/Auth/Users.php` gère les comptes (base méta `data/users.db`), leurs racines
   musicales et bases par utilisateur, ainsi que la migration d’une installation
   historique (`config.local.php`).
-- `src/Auth.php` assure l’authentification par session ; la protection est active
+- `src/Auth/Auth.php` assure l’authentification par session ; la protection est active
   dès qu’au moins un compte existe.
-- `src/DB.php` crée et migre le schéma SQLite.
-- `src/Router.php` contient la liste des routes et leur dispatch explicite.
-- `src/Api.php` exécute les requêtes SQL et construit les réponses.
-- `src/Streamer.php` traite les ranges HTTP et le transcodage FFmpeg.
-- `src/Scanner.php` parcourt `music_root` et interprète tags, dossiers et noms de fichiers.
+- `src/Database/DB.php` crée et migre le schéma SQLite ; `DatabaseConnection.php`
+  et `DatabaseStatement.php` encapsulent PDO.
+- `src/Router/Router.php` contient la liste des routes et leur dispatch vers des
+  paires `[Contrôleur, méthode]`.
+- `src/Http/Controllers/` regroupe les contrôleurs HTTP (catalogue, lecture,
+  favoris, réglages, média, compte) ; `src/Http/Request.php` lit l’entrée HTTP.
+- `src/Repo/Catalogue.php` centralise les requêtes de lecture partagées du catalogue ;
+  `Statistics.php`, `Favorites.php` et `Genres.php` complètent la couche de lecture.
+- `src/Domain/Genre.php` porte la normalisation et la liste canonique des genres.
+- `src/Streaming/Streamer.php` traite les ranges HTTP et le transcodage FFmpeg.
+- `src/Scanner/` décompose l’indexation : `Scanner.php` orchestre, `TreeWalker.php`
+  parcourt `music_root`, `TagReader.php` interprète les tags, `FilenameParser.php`
+  les noms de fichiers, `ArtExtractor.php` gère les jaquettes, `CatalogWriter.php`
+  écrit en base et `BackgroundScan.php` détache le scan en arrière-plan.
 - `public/assets/js/app.js` initialise les modules du frontend ; `core.js` porte
   l’état partagé, `views.js` le routage et les vues, `player.js` le lecteur,
   `favorites.js` les favoris, et `account.js` l’authentification et les réglages.
@@ -59,7 +68,8 @@ Avant une modification, lire au minimum `README.md`, `composer.json` et les fich
 - Utiliser PDO avec des requêtes préparées pour toute donnée externe.
 - Conserver `declare(strict_types=1)` dans les nouveaux fichiers PHP.
 - Échapper tout contenu injecté dans le HTML côté navigateur.
-- Pour une nouvelle route, mettre à jour ensemble `src/Router.php`, `src/Api.php`, `openapi.yaml` et les tests.
+- Pour une nouvelle route, mettre à jour ensemble `src/Router/Router.php`, un
+  contrôleur dans `src/Http/Controllers/`, `openapi.yaml` et les tests.
 - Pour une modification du schéma, assurer à la fois la création à neuf et la migration idempotente dans `DB::schema()`.
 - Les réponses d’erreur JSON suivent la forme `{ "error": "message" }`.
 

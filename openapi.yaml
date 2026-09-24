@@ -22,12 +22,16 @@ tags:
   - name: Lecture
   - name: Bibliothèque
   - name: Préférences
+  - name: Diagnostic
+security:
+  - sessionCookie: []
 paths:
   /api/auth:
     get:
       tags: [Préférences]
       summary: État de l'authentification
       operationId: getAuth
+      security: []
       responses:
         '200':
           description: État actuel de la session
@@ -46,6 +50,7 @@ paths:
       tags: [Préférences]
       summary: Vérifie la disponibilité de l'état d'authentification
       operationId: headAuth
+      security: []
       responses:
         '200':
           description: Disponible, sans corps de réponse.
@@ -54,6 +59,7 @@ paths:
       tags: [Préférences]
       summary: Ouvre une session d'authentification
       operationId: login
+      security: []
       requestBody:
         required: true
         content:
@@ -87,6 +93,7 @@ paths:
       tags: [Préférences]
       summary: Ferme la session courante
       operationId: logout
+      security: []
       responses:
         '200':
           $ref: '#/components/responses/Ok'
@@ -113,11 +120,12 @@ paths:
   /api/ping:
     get:
       tags: [Lecture]
-      summary: Garde la connexion du lecteur éveillée
+      summary: Vérifie la disponibilité de l'API
       description: |
-        Point de contact minimal, sans état. Le lecteur mobile l'appelle
-        régulièrement pendant une lecture en arrière-plan pour maintenir le
-        réseau de l'appareil actif et permettre le pré-chargement des pistes.
+        Point de contact minimal et sans état, conservé pour les diagnostics et
+        les clients historiques. Le lecteur web actuel ne l'appelle pas
+        périodiquement : la lecture en arrière-plan repose sur le préchargement
+        audio et la Media Session du navigateur.
       operationId: ping
       responses:
         '200':
@@ -137,7 +145,9 @@ paths:
       parameters:
         - name: letter
           in: query
-          description: Lettre optionnelle. Absente ou vide : renvoie tous les artistes. Sinon : les artistes commençant par cette lettre.
+          description: >-
+            Lettre optionnelle. Absente ou vide : renvoie tous les artistes.
+            Sinon : les artistes commençant par cette lettre.
           schema:
             type: string
             maxLength: 1
@@ -890,6 +900,12 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: muzik_session
+      description: Cookie de session établi par `POST /api/login`.
   parameters:
     Id:
       name: id

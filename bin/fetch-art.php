@@ -11,8 +11,6 @@
 if (defined('MUZIK_INCLUDE_ONLY')) {
     /* include-able : on ne veut que les fonctions de matching (tag.php) */
 } else {
-    require __DIR__ . '/../src/DB.php';
-    require __DIR__ . '/../src/App.php';
     require __DIR__ . '/lib/bootstrap.php';
     App::initConfig(muzik_cli_config($argv));
     $pdo = App::pdo();
@@ -523,28 +521,7 @@ function itunesGenre(string $term, string $na, string $nal, bool $isSelfTitled, 
 /** Normalise les noms de genre issus des services pour une catégorie unique. */
 function normalizeGenre(?string $genre): ?string
 {
-    if ($genre === null || $genre === '') {
-        return $genre;
-    }
-    static $aliases = [
-        'hip-hop/rap' => 'Rap/Hip Hop',
-        'hip hop/rap' => 'Rap/Hip Hop',
-        'hip-hop & rap' => 'Rap/Hip Hop',
-        'rap & hip-hop' => 'Rap/Hip Hop',
-        'rap & hip hop' => 'Rap/Hip Hop',
-        'hip hop' => 'Rap/Hip Hop',
-        'variété française' => 'Chanson française',
-        'variété francaise' => 'Chanson française',
-        'variete francaise' => 'Chanson française',
-        'raíces' => 'Latino',
-        'musique brésilienne' => 'Latino',
-        'metal' => 'Rock',
-        'métal' => 'Rock',
-        'paroles/interprétation' => 'Chanson française',
-        'musique classique' => 'Classique',
-    ];
-    $key = strtolower(trim(preg_replace('/\s+/', ' ', $genre)));
-    return $aliases[$key] ?? trim($genre);
+    return Genre::normalize($genre);
 }
 
 /**

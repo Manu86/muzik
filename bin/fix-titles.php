@@ -10,8 +10,6 @@ declare(strict_types=1);
  *     underscores remplacés par des espaces.
  */
 
-require __DIR__ . '/../src/DB.php';
-require __DIR__ . '/../src/App.php';
 require __DIR__ . '/lib/bootstrap.php';
 App::initConfig(muzik_cli_config($argv));
 $pdo = App::pdo();

@@ -75,8 +75,6 @@ if (defined('MUZIK_ARTIST_ART_INCLUDE_ONLY')) {
     return;
 }
 
-require_once __DIR__ . '/../src/DB.php';
-require_once __DIR__ . '/../src/App.php';
 require_once __DIR__ . '/lib/bootstrap.php';
 
 $apply = in_array('--apply', $argv, true);

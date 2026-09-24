@@ -12,8 +12,6 @@
 
 define('MUZIK_INCLUDE_ONLY', true);
 
-require __DIR__ . '/../src/DB.php';
-require __DIR__ . '/../src/App.php';
 require __DIR__ . '/fetch-art.php';
 require __DIR__ . '/lib/bootstrap.php';
 

@@ -63,7 +63,7 @@ final class MultiUserTest extends TestCase
     {
         $this->createAndLoginUser('paul');
 
-        $settings = $this->captureJson(static fn() => Api::settings());
+        $settings = $this->captureJson(static fn() => SettingsController::settings());
 
         self::assertSame('paul', $settings->data['user']);
         self::assertTrue($settings->data['auth_enabled']);

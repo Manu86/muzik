@@ -18,7 +18,7 @@ final class DiagTest extends TestCase
                 ['t' => '12:00:01.000', 'e' => 'heartbeat'],
             ],
         ], JSON_THROW_ON_ERROR);
-        $response = $this->captureJson(static fn() => Api::diag());
+        $response = $this->captureJson(static fn() => SettingsController::diag());
         self::assertSame(200, $response->status);
         self::assertTrue($response->data['ok']);
 
@@ -40,15 +40,15 @@ final class DiagTest extends TestCase
     public function testDiagnosticPayloadIsRejectedWhenEmptyOrMalformed(): void
     {
         $_POST = [];
-        $empty = $this->captureJson(static fn() => Api::diag());
+        $empty = $this->captureJson(static fn() => SettingsController::diag());
         self::assertSame(400, $empty->status);
 
         $_POST['log'] = '{"log": []}';
-        $noEntries = $this->captureJson(static fn() => Api::diag());
+        $noEntries = $this->captureJson(static fn() => SettingsController::diag());
         self::assertSame(400, $noEntries->status);
 
         $_POST['log'] = '{"foo": "bar"}';
-        $noLogKey = $this->captureJson(static fn() => Api::diag());
+        $noLogKey = $this->captureJson(static fn() => SettingsController::diag());
         self::assertSame(400, $noLogKey->status);
 
         self::assertSame([], glob($this->temporaryDirectory . '/diag-*.json') ?: []);

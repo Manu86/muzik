@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 2) . '/src/DB.php';
-require_once dirname(__DIR__, 2) . '/src/App.php';
-require_once dirname(__DIR__, 2) . '/src/Users.php';
+require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 if (!function_exists('muzik_cli_config')) {
     /**

@@ -25,7 +25,7 @@ final class Users
             return self::$pdo;
         }
         $envPath = getenv('MUZIK_USERS_DB');
-        $path ??= is_string($envPath) && $envPath !== '' ? $envPath : dirname(__DIR__) . '/data/users.db';
+        $path ??= is_string($envPath) && $envPath !== '' ? $envPath : dirname(__DIR__, 2) . '/data/users.db';
         if (self::$pdo === null || self::$path !== $path) {
             self::$path = $path;
             $dir = dirname($path);
@@ -260,7 +260,7 @@ final class Users
      */
     public static function baseConfig(): array
     {
-        $config = require dirname(__DIR__) . '/config.php';
+        $config = require dirname(__DIR__, 2) . '/config.php';
         if (!is_array($config)) {
             throw new RuntimeException('config.php doit retourner un tableau.');
         }

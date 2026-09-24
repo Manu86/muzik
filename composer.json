@@ -13,6 +13,11 @@
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^10.5"
     },
+    "autoload": {
+        "classmap": [
+            "src/"
+        ]
+    },
     "scripts": {
         "lint": "@php vendor/bin/parallel-lint --exclude vendor src bin public tests config config.php config.local.example.php",
         "analyse": "@php vendor/bin/phpstan analyse --debug --memory-limit=512M",

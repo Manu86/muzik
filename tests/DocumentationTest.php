@@ -17,7 +17,7 @@ final class DocumentationTest extends TestCase
     public function testOpenApiDocumentsEveryRouterPath(): void
     {
         $root = dirname(__DIR__);
-        $router = file_get_contents($root . '/src/Router.php');
+        $router = file_get_contents($root . '/src/Router/Router.php');
         $openApi = file_get_contents($root . '/openapi.yaml');
         self::assertNotFalse($router);
         self::assertNotFalse($openApi);
@@ -47,15 +47,50 @@ final class DocumentationTest extends TestCase
         self::assertSame($matches[1], array_values(array_unique($matches[1])));
     }
 
+    public function testOpenApiDocumentsSessionAuthenticationAndPublicOperations(): void
+    {
+        $openApi = file_get_contents(dirname(__DIR__) . '/openapi.yaml');
+        self::assertNotFalse($openApi);
+
+        self::assertStringContainsString("  - sessionCookie: []\n", $openApi);
+        self::assertStringContainsString("    sessionCookie:\n      type: apiKey\n      in: cookie\n      name: muzik_session", $openApi);
+
+        foreach (['getAuth', 'headAuth', 'login', 'logout'] as $operationId) {
+            self::assertMatchesRegularExpression(
+                '/operationId: ' . $operationId . '\R      security: \[\]/',
+                $openApi,
+            );
+        }
+    }
+
+    public function testArchitectureDocumentationReferencesExtractedFiles(): void
+    {
+        $root = dirname(__DIR__);
+        $readme = file_get_contents($root . '/README.md');
+        $agents = file_get_contents($root . '/AGENTS.md');
+        self::assertNotFalse($readme);
+        self::assertNotFalse($agents);
+
+        foreach (['public/app.html', 'public/assets/css/app.css', 'src/Repo/Catalogue.php'] as $path) {
+            self::assertStringContainsString($path, $readme);
+        }
+        self::assertStringContainsString('src/Repo/Catalogue.php', $agents);
+    }
+
     public function testOpenApiDocumentsEveryRouterMethod(): void
     {
         $root = dirname(__DIR__);
-        $router = file_get_contents($root . '/src/Router.php');
+        $router = file_get_contents($root . '/src/Router/Router.php');
         $openApi = file_get_contents($root . '/openapi.yaml');
         self::assertNotFalse($router);
         self::assertNotFalse($openApi);
 
-        preg_match_all("/\\['(api\\/[^']+)',\\s*'[^']+',\\s*'(GET|POST|PATCH|DELETE)'\\]/", $router, $matches, PREG_SET_ORDER);
+        preg_match_all(
+            "/\\['(api\\/[^']+)',\\s*\\[[A-Za-z0-9_]+::class,\\s*'[^']+'\\],\\s*'(GET|POST|PATCH|DELETE)'\\]/",
+            $router,
+            $matches,
+            PREG_SET_ORDER,
+        );
         self::assertNotEmpty($matches);
 
         foreach ($matches as $match) {
@@ -99,16 +134,24 @@ final class DocumentationTest extends TestCase
         $root = dirname(__DIR__);
         $index = file_get_contents($root . '/public/index.php');
         self::assertNotFalse($index);
+        self::assertStringContainsString("require __DIR__ . '/../vendor/autoload.php';", $index);
 
-        $sources = glob($root . '/src/*.php');
-        self::assertNotEmpty($sources);
+        $classMap = file_get_contents($root . '/vendor/composer/autoload_classmap.php');
+        self::assertNotFalse($classMap);
 
-        foreach ($sources as $source) {
-            $class = basename($source);
-            self::assertStringContainsString(
-                "require __DIR__ . '/../src/{$class}';",
-                $index,
-                "public/index.php doit charger {$class}.",
+        $sources = glob($root . '/src/*.php') ?: [];
+        $nested = glob($root . '/src/*/*.php') ?: [];
+        $files = array_merge($sources, $nested);
+        self::assertNotEmpty($files);
+
+        foreach ($files as $source) {
+            $class = basename($source, '.php');
+            $relative = '/' . str_replace($root . '/', '', $source);
+            $entry = "'" . $class . "' => \$baseDir . '" . $relative . "',";
+            self::assertMatchesRegularExpression(
+                '/' . preg_quote($entry, '/') . '/',
+                $classMap,
+                "Le classmap Composer doit charger {$relative}.",
             );
         }
     }

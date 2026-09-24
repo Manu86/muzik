@@ -23,7 +23,7 @@ final class ApiTest extends TestCase
 
     public function testSummaryAndCatalogueListings(): void
     {
-        $summary = $this->captureJson(static fn() => Api::summary());
+        $summary = $this->captureJson(static fn() => CatalogController::summary());
         self::assertSame([
             'artists' => 2,
             'albums' => 2,
@@ -32,14 +32,14 @@ final class ApiTest extends TestCase
             'duration' => 240.0,
         ], $summary->data);
 
-        $artists = $this->captureJson(static fn() => Api::artists());
+        $artists = $this->captureJson(static fn() => CatalogController::artists());
         self::assertSame(2, $artists->data['total']);
         $letters = $artists->data['letters'];
         self::assertIsArray($letters);
         self::assertSame(['A', 'B'], array_column($letters, 'l'));
 
         $_GET = ['letter' => 'A'];
-        $letter = $this->captureJson(static fn() => Api::artists());
+        $letter = $this->captureJson(static fn() => CatalogController::artists());
         self::assertCount(1, $letter->data);
         $letterRow = $letter->data[0];
         self::assertIsArray($letterRow);
@@ -48,12 +48,12 @@ final class ApiTest extends TestCase
         self::assertSame(2, (int) $letterRow['song_count']);
 
         $_GET = ['letter' => ''];
-        $all = $this->captureJson(static fn() => Api::artists());
+        $all = $this->captureJson(static fn() => CatalogController::artists());
         self::assertCount(2, $all->data);
         self::assertSame(['Alpha', 'Beta'], array_column($all->data, 'name'));
 
         $_GET = ['artist_id' => (string) $this->alphaArtist, 'letter' => 'A'];
-        $albums = $this->captureJson(static fn() => Api::albums());
+        $albums = $this->captureJson(static fn() => CatalogController::albums());
         self::assertSame(1, $albums->data['total']);
         $albumRows = $albums->data['albums'];
         self::assertIsArray($albumRows);
@@ -65,7 +65,7 @@ final class ApiTest extends TestCase
     public function testAlbumsRespectTheLimitParameter(): void
     {
         $_GET = ['limit' => '1'];
-        $page = $this->captureJson(static fn() => Api::albums());
+        $page = $this->captureJson(static fn() => CatalogController::albums());
         self::assertSame(2, $page->data['total']);
         $albumRows = $page->data['albums'];
         self::assertIsArray($albumRows);
@@ -76,7 +76,7 @@ final class ApiTest extends TestCase
         self::assertSame(1, $page->data['page']);
 
         $_GET = ['limit' => '500'];
-        $all = $this->captureJson(static fn() => Api::albums());
+        $all = $this->captureJson(static fn() => CatalogController::albums());
         self::assertSame(2, $all->data['total']);
         $allRows = $all->data['albums'];
         self::assertIsArray($allRows);
@@ -86,7 +86,7 @@ final class ApiTest extends TestCase
     public function testArtistAlbumAndSongDetailsAndMissingResources(): void
     {
         $artistId = (string) $this->alphaArtist;
-        $artist = $this->captureJson(static fn() => Api::artist($artistId));
+        $artist = $this->captureJson(static fn() => CatalogController::artist($artistId));
         self::assertSame('Alpha', $artist->data['name']);
         $artistAlbums = $artist->data['albums'];
         self::assertIsArray($artistAlbums);
@@ -95,21 +95,21 @@ final class ApiTest extends TestCase
         self::assertSame('First Album', $artistAlbum['name']);
 
         $albumId = (string) $this->rockAlbum;
-        $album = $this->captureJson(static fn() => Api::album($albumId));
+        $album = $this->captureJson(static fn() => CatalogController::album($albumId));
         self::assertSame('Rock', $album->data['genre']);
         self::assertIsArray($album->data['songs']);
         self::assertCount(2, $album->data['songs']);
         self::assertSame('/Alpha/First Album', $album->data['path']);
 
         $songId = (string) $this->songOne;
-        $song = $this->captureJson(static fn() => Api::song($songId));
+        $song = $this->captureJson(static fn() => CatalogController::song($songId));
         self::assertSame('Song One', $song->data['title']);
         self::assertSame('Alpha', $song->data['artist_name']);
 
         foreach ([
-            static fn() => Api::artist('999'),
-            static fn() => Api::album('999'),
-            static fn() => Api::song('999'),
+            static fn() => CatalogController::artist('999'),
+            static fn() => CatalogController::album('999'),
+            static fn() => CatalogController::song('999'),
         ] as $request) {
             $response = $this->captureJson($request);
             self::assertSame(404, $response->status);
@@ -120,12 +120,12 @@ final class ApiTest extends TestCase
     {
         $_GET = ['type' => 'artist'];
         ob_start();
-        Api::art((string) $this->betaArtist);
+        MediaController::art((string) $this->betaArtist);
         $fallback = ob_get_clean();
         self::assertSame('cover', $fallback);
 
         ob_start();
-        Api::art((string) $this->alphaArtist);
+        MediaController::art((string) $this->alphaArtist);
         $artistImage = ob_get_clean();
         self::assertSame('artist', $artistImage);
     }
@@ -134,7 +134,7 @@ final class ApiTest extends TestCase
     {
         $albumId = (string) $this->rockAlbum;
         $_GET = ['name' => 'Renamed Album', 'year' => '1999'];
-        $response = $this->captureJson(static fn() => Api::albumUpdate($albumId));
+        $response = $this->captureJson(static fn() => CatalogController::albumUpdate($albumId));
         self::assertSame(200, $response->status);
         self::assertSame('Renamed Album', $response->data['name']);
         self::assertSame(1999, $response->data['year']);
@@ -149,24 +149,24 @@ final class ApiTest extends TestCase
     {
         $albumId = (string) $this->rockAlbum;
         $_GET = ['year' => ''];
-        $cleared = $this->captureJson(static fn() => Api::albumUpdate($albumId));
+        $cleared = $this->captureJson(static fn() => CatalogController::albumUpdate($albumId));
         self::assertSame(200, $cleared->status);
         self::assertNull($cleared->data['year']);
 
         $_GET = ['name' => '   '];
-        $blank = $this->captureJson(static fn() => Api::albumUpdate($albumId));
+        $blank = $this->captureJson(static fn() => CatalogController::albumUpdate($albumId));
         self::assertSame(400, $blank->status);
 
         $_GET = ['name' => 'Bad Year', 'year' => '2050'];
-        $future = $this->captureJson(static fn() => Api::albumUpdate($albumId));
+        $future = $this->captureJson(static fn() => CatalogController::albumUpdate($albumId));
         self::assertSame(400, $future->status);
 
         $_GET = [];
-        $none = $this->captureJson(static fn() => Api::albumUpdate($albumId));
+        $none = $this->captureJson(static fn() => CatalogController::albumUpdate($albumId));
         self::assertSame(400, $none->status);
 
         $_GET = ['name' => 'Missing'];
-        $missing = $this->captureJson(static fn() => Api::albumUpdate('999'));
+        $missing = $this->captureJson(static fn() => CatalogController::albumUpdate('999'));
         self::assertSame(404, $missing->status);
     }
 
@@ -178,7 +178,7 @@ final class ApiTest extends TestCase
             ->execute([$this->alphaArtist, 'Renamed Album', '/x']);
 
         $_GET = ['name' => 'Renamed Album'];
-        $response = $this->captureJson(static fn() => Api::albumUpdate($albumId));
+        $response = $this->captureJson(static fn() => CatalogController::albumUpdate($albumId));
         self::assertSame(409, $response->status);
         self::assertSame(['error' => 'Un album portant ce nom existe déjà pour cet artiste'], $response->data);
 
@@ -189,19 +189,19 @@ final class ApiTest extends TestCase
     public function testSearchValidatesAndFindsAllEntityTypes(): void
     {
         $_GET = ['q' => 'x'];
-        $short = $this->captureJson(static fn() => Api::search());
+        $short = $this->captureJson(static fn() => CatalogController::search());
         self::assertSame(400, $short->status);
         self::assertSame(['error' => 'Query too short'], $short->data);
 
         $_GET = ['q' => 'Alpha'];
-        $result = $this->captureJson(static fn() => Api::search());
+        $result = $this->captureJson(static fn() => CatalogController::search());
         self::assertIsArray($result->data['songs']);
         self::assertCount(2, $result->data['songs']);
         self::assertIsArray($result->data['artists']);
         self::assertCount(1, $result->data['artists']);
 
         $_GET = ['q' => 'Album'];
-        $albums = $this->captureJson(static fn() => Api::search());
+        $albums = $this->captureJson(static fn() => CatalogController::search());
         self::assertIsArray($albums->data['albums']);
         self::assertCount(2, $albums->data['albums']);
     }
@@ -209,22 +209,22 @@ final class ApiTest extends TestCase
     public function testRandomHonoursLimitsAndOffsets(): void
     {
         $_GET = ['n' => '2', 'offset' => '0'];
-        $two = $this->captureJson(static fn() => Api::random());
+        $two = $this->captureJson(static fn() => CatalogController::random());
         self::assertCount(2, $two->data);
 
         $_GET = ['n' => '0', 'offset' => '99'];
-        $empty = $this->captureJson(static fn() => Api::random());
+        $empty = $this->captureJson(static fn() => CatalogController::random());
         self::assertSame([], $empty->data);
     }
 
     public function testPlayTopAndRecentStatistics(): void
     {
         $songId = (string) $this->songTwo;
-        $played = $this->captureJson(static fn() => Api::play($songId));
+        $played = $this->captureJson(static fn() => PlaybackController::play($songId));
         self::assertSame(['ok' => true], $played->data);
         self::assertSame(1, (int) App::pdo()->query("SELECT play_count FROM songs WHERE id = {$this->songTwo}")->fetchColumn());
 
-        $top = $this->captureJson(static fn() => Api::top());
+        $top = $this->captureJson(static fn() => PlaybackController::top());
         self::assertSame(4, $top->data['total_plays']);
         $topSongs = $top->data['songs'];
         $topAlbums = $top->data['albums'];
@@ -235,28 +235,28 @@ final class ApiTest extends TestCase
         self::assertSame('Song One', $topSongs[0]['title']);
         self::assertSame('First Album', $topAlbums[0]['name']);
 
-        $recent = $this->captureJson(static fn() => Api::recent());
+        $recent = $this->captureJson(static fn() => PlaybackController::recent());
         self::assertCount(2, $recent->data);
     }
 
     public function testFavoritesCanBeListedCheckedAddedAndRemoved(): void
     {
-        $initial = $this->captureJson(static fn() => Api::favorites());
+        $initial = $this->captureJson(static fn() => FavoritesController::favorites());
         self::assertSame([$this->songOne], array_map(
             static fn(mixed $id): int => is_numeric($id) ? (int) $id : 0,
             array_column($initial->data, 'id')
         ));
 
         $_GET = ['action' => 'check', 'id' => (string) $this->songOne];
-        $checked = $this->captureJson(static fn() => Api::favorites());
+        $checked = $this->captureJson(static fn() => FavoritesController::favorites());
         self::assertTrue($checked->data['favorited']);
 
         $_GET = ['action' => 'add', 'id' => (string) $this->songTwo];
-        $added = $this->captureJson(static fn() => Api::favorites());
+        $added = $this->captureJson(static fn() => FavoritesController::favorites());
         self::assertCount(2, $added->data);
 
         $_GET = ['action' => 'remove', 'id' => (string) $this->songOne];
-        $removed = $this->captureJson(static fn() => Api::favorites());
+        $removed = $this->captureJson(static fn() => FavoritesController::favorites());
         self::assertSame([$this->songTwo], array_map(
             static fn(mixed $id): int => is_numeric($id) ? (int) $id : 0,
             array_column($removed->data, 'id')
@@ -265,8 +265,8 @@ final class ApiTest extends TestCase
 
     public function testGenresAndGenreDetails(): void
     {
-        $genres = $this->captureJson(static fn() => Api::genres());
-        $expected = DB::GENRES;
+        $genres = $this->captureJson(static fn() => CatalogController::genres());
+        $expected = Genre::GENRES;
         sort($expected);
         self::assertSame($expected, array_column($genres->data, 'genre'));
         $byName = [];
@@ -293,24 +293,24 @@ final class ApiTest extends TestCase
         self::assertSame(0, (int) $electroAlbumCount);
 
         $_GET = ['name' => 'Rock'];
-        $rock = $this->captureJson(static fn() => Api::genre());
+        $rock = $this->captureJson(static fn() => CatalogController::genre());
         self::assertSame(1, $rock->data['total_albums']);
         self::assertSame(2, $rock->data['total_songs']);
 
         $_GET = [];
-        $missing = $this->captureJson(static fn() => Api::genre());
+        $missing = $this->captureJson(static fn() => CatalogController::genre());
         self::assertSame(400, $missing->status);
     }
 
     public function testHomeAggregatesEveryDashboardSection(): void
     {
-        $home = $this->captureJson(static fn() => Api::home());
+        $home = $this->captureJson(static fn() => CatalogController::home());
 
         foreach (['genres', 'artists', 'albums', 'recent', 'poche', 'covers'] as $section) {
             self::assertArrayHasKey($section, $home->data);
             self::assertIsArray($home->data[$section]);
         }
-        self::assertCount(count(DB::GENRES), $home->data['genres']);
+        self::assertCount(count(Genre::GENRES), $home->data['genres']);
         self::assertCount(2, $home->data['artists']);
         self::assertCount(2, $home->data['albums']);
         self::assertCount(1, $home->data['recent']);
@@ -321,18 +321,18 @@ final class ApiTest extends TestCase
     public function testSettingsCanBeReadAndChanged(): void
     {
         DB::setSetting('transcode', '64');
-        $settings = $this->captureJson(static fn() => Api::settings());
+        $settings = $this->captureJson(static fn() => SettingsController::settings());
         self::assertSame('64', $settings->data['transcode']);
 
         $_GET = ['set_key' => 'transcode', 'value' => '128'];
-        $updated = $this->captureJson(static fn() => Api::settings());
+        $updated = $this->captureJson(static fn() => SettingsController::settings());
         self::assertSame(['ok' => true], $updated->data);
         self::assertSame('128', DB::setting('transcode'));
     }
 
     public function testSettingsExposeTheCurrentMusicRoot(): void
     {
-        $settings = $this->captureJson(static fn() => Api::settings());
+        $settings = $this->captureJson(static fn() => SettingsController::settings());
         self::assertArrayHasKey('music_root', $settings->data);
         self::assertSame(App::musicRoot(), $settings->data['music_root']);
     }
@@ -343,7 +343,7 @@ final class ApiTest extends TestCase
         mkdir($newRoot, 0777, true);
         $_POST = ['music_root' => $newRoot];
 
-        $response = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        $response = $this->captureJson(fn() => SettingsController::config($this->temporaryDirectory));
         self::assertSame(401, $response->status);
         self::assertSame(['error' => 'Unauthorized'], $response->data);
     }
@@ -353,12 +353,12 @@ final class ApiTest extends TestCase
         $this->createAndLoginUser();
 
         unset($_POST['music_root']);
-        $missing = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        $missing = $this->captureJson(fn() => SettingsController::config($this->temporaryDirectory));
         self::assertSame(400, $missing->status);
         self::assertSame(['error' => 'Indiquez le dossier contenant vos fichiers de musique.'], $missing->data);
 
         $_POST = ['music_root' => $this->temporaryDirectory . '/absent'];
-        $unreadable = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        $unreadable = $this->captureJson(fn() => SettingsController::config($this->temporaryDirectory));
         self::assertSame(400, $unreadable->status);
         self::assertSame(['error' => 'Le dossier de musique doit exister et être lisible par le serveur.'], $unreadable->data);
     }
@@ -371,7 +371,7 @@ final class ApiTest extends TestCase
         mkdir($newRoot, 0777, true);
         $_POST = ['music_root' => $newRoot];
 
-        $response = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        $response = $this->captureJson(fn() => SettingsController::config($this->temporaryDirectory));
         self::assertSame(200, $response->status);
         self::assertArrayHasKey('ok', $response->data);
         self::assertTrue($response->data['ok']);
@@ -386,7 +386,7 @@ final class ApiTest extends TestCase
 
         self::assertFileDoesNotExist($this->temporaryDirectory . '/config.local.php');
 
-        $settings = $this->captureJson(static fn() => Api::settings());
+        $settings = $this->captureJson(static fn() => SettingsController::settings());
         self::assertSame($newRoot, $settings->data['music_root']);
     }
 
@@ -406,7 +406,7 @@ final class ApiTest extends TestCase
         mkdir($newRoot, 0777, true);
         $_POST = ['music_root' => $newRoot];
 
-        $response = $this->captureJson(fn() => Api::config($this->temporaryDirectory));
+        $response = $this->captureJson(fn() => SettingsController::config($this->temporaryDirectory));
         self::assertSame(200, $response->status);
         self::assertTrue($response->data['scan_started']);
         self::assertSame('1', DB::setting('scan_running'));
@@ -418,7 +418,7 @@ final class ApiTest extends TestCase
     public function testScanRefusesWhenAlreadyRunning(): void
     {
         DB::setSetting('scan_running', '1');
-        $response = $this->captureJson(static fn() => Api::scan());
+        $response = $this->captureJson(static fn() => SettingsController::scan());
         self::assertSame(['ok' => false, 'running' => true], $response->data);
         self::assertSame(200, $response->status);
     }
@@ -433,7 +433,7 @@ final class ApiTest extends TestCase
         file_put_contents($this->temporaryDirectory . '/bin/scan.php', "<?php\n");
         mkdir($this->temporaryDirectory . '/data', 0777, true);
 
-        $response = $this->captureJson(fn() => Api::scan($this->temporaryDirectory));
+        $response = $this->captureJson(fn() => SettingsController::scan($this->temporaryDirectory));
         self::assertSame(['ok' => true], $response->data);
         self::assertSame('1', DB::setting('scan_running'));
         self::assertNotNull(DB::setting('scan_started_at'));
@@ -455,7 +455,7 @@ final class ApiTest extends TestCase
             "<?php\nfile_put_contents(__DIR__ . '/../data/scan-argv.json', json_encode(\$_SERVER['argv']));\n"
         );
 
-        $response = $this->captureJson(fn() => Api::scan($this->temporaryDirectory));
+        $response = $this->captureJson(fn() => SettingsController::scan($this->temporaryDirectory));
         self::assertSame(['ok' => true], $response->data);
 
         usleep(300000);
@@ -468,15 +468,15 @@ final class ApiTest extends TestCase
     {
         $_GET = ['transcode' => '0'];
         ob_start();
-        Api::stream((string) $this->songOne);
+        MediaController::stream((string) $this->songOne);
         self::assertSame('abcdef', ob_get_clean());
 
         unlink($this->betaSongPath);
-        $missing = $this->captureJson(fn() => Api::stream((string) $this->songThree));
+        $missing = $this->captureJson(fn() => MediaController::stream((string) $this->songThree));
         self::assertSame(404, $missing->status);
         self::assertSame(['error' => 'File missing'], $missing->data);
 
-        $unknown = $this->captureJson(static fn() => Api::stream('999'));
+        $unknown = $this->captureJson(static fn() => MediaController::stream('999'));
         self::assertSame(404, $unknown->status);
     }
 
@@ -484,7 +484,7 @@ final class ApiTest extends TestCase
     {
         $_GET = ['transcode' => '128'];
         ob_start();
-        Api::stream((string) $this->songOne);
+        MediaController::stream((string) $this->songOne);
         self::assertSame('abcdef', ob_get_clean());
     }
 
@@ -514,12 +514,12 @@ final class ApiTest extends TestCase
 
         $_GET = ['transcode' => '0'];
         ob_start();
-        Api::stream((string) $songId);
+        MediaController::stream((string) $songId);
         self::assertSame('FLAC-DUMMY', ob_get_clean());
 
         $_GET = ['transcode' => '128', 'start' => '12.5'];
         ob_start();
-        Api::stream((string) $songId);
+        MediaController::stream((string) $songId);
         $arguments = (string) ob_get_clean();
         self::assertStringContainsString($flacFile, $arguments);
         self::assertStringContainsString('-b:a 128k', $arguments);
@@ -529,18 +529,18 @@ final class ApiTest extends TestCase
     public function testAlbumArtworkCanBeReadAndHeadSkipsItsBody(): void
     {
         ob_start();
-        Api::art((string) $this->rockAlbum);
+        MediaController::art((string) $this->rockAlbum);
         self::assertSame('cover', ob_get_clean());
 
         $_SERVER['REQUEST_METHOD'] = 'HEAD';
         ob_start();
-        Api::art((string) $this->rockAlbum);
+        MediaController::art((string) $this->rockAlbum);
         self::assertSame('', ob_get_clean());
 
         $_SERVER['REQUEST_METHOD'] = 'GET';
         $_GET = ['type' => 'artist'];
         ob_start();
-        Api::art((string) $this->alphaArtist);
+        MediaController::art((string) $this->alphaArtist);
         self::assertSame('artist', ob_get_clean());
     }
 
@@ -556,7 +556,7 @@ final class ApiTest extends TestCase
         self::assertFileExists($this->betaCoverPath);
 
         $albumId = (string) $this->jazzAlbum;
-        $deleted = $this->captureJson(static fn() => Api::albumDelete($albumId));
+        $deleted = $this->captureJson(static fn() => CatalogController::albumDelete($albumId));
         self::assertSame(['ok' => true, 'songs' => 2, 'files_deleted' => 1], $deleted->data);
         self::assertFileDoesNotExist($this->betaSongPath);
         self::assertFileDoesNotExist($this->betaCoverPath);

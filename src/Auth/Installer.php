@@ -17,7 +17,7 @@ final class Installer
      */
     public static function installed(?string $projectRoot = null): bool
     {
-        $projectRoot ??= dirname(__DIR__);
+        $projectRoot ??= dirname(__DIR__, 2);
         Users::ensureSchema($projectRoot);
 
         return Users::count() > 0;
@@ -160,10 +160,10 @@ final class Installer
     /**
      * Lance bin/scan.php en arrière-plan et retourne immédiatement.
      *
-     * Délègue à {@see Scanner::startBackgroundScan()}.
+     * Délègue à {@see BackgroundScan::start()}.
      */
     public static function startBackgroundScan(string $projectRoot, ?string $login = null): bool
     {
-        return Scanner::startBackgroundScan($projectRoot, $login);
+        return BackgroundScan::start($projectRoot, $login);
     }
 }

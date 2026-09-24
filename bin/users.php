@@ -24,8 +24,6 @@ if (PHP_SAPI !== 'cli') {
  */
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/DB.php';
-require __DIR__ . '/../src/Users.php';
 
 $argv = $_SERVER['argv'] ?? [];
 $args = is_array($argv) ? $argv : [];

@@ -10,15 +10,15 @@ final class DBTest extends TestCase
         DB::schema();
 
         $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type = 'table'")
-            ->fetchAll(PDO::FETCH_COLUMN);
+            ->fetchColumnValues();
         foreach (['artists', 'albums', 'songs', 'favorites', 'settings', 'genres'] as $table) {
             self::assertContains($table, $tables);
         }
 
-        $songColumns = $pdo->query('PRAGMA table_info(songs)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        $songColumns = $pdo->query('PRAGMA table_info(songs)')->fetchColumnValues(1);
         self::assertContains('play_count', $songColumns);
         self::assertContains('last_played', $songColumns);
-        $albumColumns = $pdo->query('PRAGMA table_info(albums)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        $albumColumns = $pdo->query('PRAGMA table_info(albums)')->fetchColumnValues(1);
         self::assertContains('genre', $albumColumns);
     }
 
@@ -30,7 +30,7 @@ final class DBTest extends TestCase
 
         DB::schema();
 
-        $columns = $pdo->query('PRAGMA table_info(albums)')->fetchAll(PDO::FETCH_COLUMN, 1);
+        $columns = $pdo->query('PRAGMA table_info(albums)')->fetchColumnValues(1);
         self::assertContains('genre', $columns);
     }
 
@@ -38,9 +38,9 @@ final class DBTest extends TestCase
     {
         $pdo = DB::init($this->temporaryDirectory . '/seeded.sqlite');
         DB::schema();
-        self::assertCount(count(DB::GENRES), $pdo->query('SELECT name FROM genres')->fetchAll(PDO::FETCH_COLUMN));
+        self::assertCount(count(Genre::GENRES), $pdo->query('SELECT name FROM genres')->fetchColumnValues());
         DB::schema();
-        self::assertCount(count(DB::GENRES), $pdo->query('SELECT name FROM genres')->fetchAll(PDO::FETCH_COLUMN));
+        self::assertCount(count(Genre::GENRES), $pdo->query('SELECT name FROM genres')->fetchColumnValues());
     }
 
     public function testSchemaKeepsAnExistingCatalogueWithoutSeedingGenres(): void

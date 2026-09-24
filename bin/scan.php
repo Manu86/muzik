@@ -13,7 +13,6 @@ foreach ((array) ($_SERVER['argv'] ?? []) as $item) {
 $full = in_array('--full', $args, true);
 
 require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../src/Scanner.php';
 require __DIR__ . '/lib/bootstrap.php';
 
 App::initConfig(muzik_cli_config($args));
